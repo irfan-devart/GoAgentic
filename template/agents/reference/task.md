@@ -108,15 +108,15 @@ A task session never sends anything outside the workspace that its ladder does n
 The skill (`skills/delegate/SKILL.md`) checks, in order, and refuses with one line if any fails:
 1. Inside Herdr, and the caller is an active agent (a lead), not the principal alone.
 2. The target is active, in this workspace root, and its `context.md` has `lead: <caller>`.
-3. The target is **not live anywhere**: no `herdr agent list` entry under this root named `<target>`, `<target>-peer` or `<target>-task`. Two sessions on one tracker is the failure this prevents. If the principal has it open, ask them to wrap it first.
+3. The target is **not live anywhere**: no `herdr agent list` entry under this root named `<target>`, `<target>-peer` or `<target>-task`. Two sessions on one tracker is the failure this prevents. If the principal has it open, ask them to wrap it first; never issue beside it and never close it yourself.
 4. The lead has fewer than `task-limit` tasks in flight (workspace frontmatter, default 3): work orders `from: <caller>` anywhere in the workspace with status `open`, `working`, `question` or `review`.
 5. The outcome is approved (§ 2). If the lead cannot point to where {{PRINCIPAL}} approved it, ask {{PRINCIPAL}} first.
 
-Then it writes the work order, opens a fresh pane (`<Target> - Task`, in the lead's tab), starts the target as `<target>-task`, prompts `<start> <target> task <file>` **without waiting**, sets `task_pane:`, and returns.
+All checks run before anything is written: a refused delegation leaves no file and no pane. Then it writes the work order, opens a fresh pane (`<Target> - Task`, in the lead's tab), starts the target as `<target>-task`, prompts `<start> <target> task <file>` **without waiting**, sets `task_pane:`, and returns.
 
 ### Watching
 
-Run `herdr agent wait <target>-task --until idle --until done --until blocked` in the background (Claude Code: Bash with `run_in_background`), so you are woken when the task pane stops. Then read the work order:
+After the start prompt, wait for the pane to reach `working` (`herdr agent wait <target>-task --until working --timeout 60000`): a fresh pane starts idle. Then run `herdr agent wait <target>-task --until idle --until done --until blocked` in the background (Claude Code: Bash with `run_in_background`), so you are woken when the task pane stops. Then read the work order:
 
 - `question` → answer (below).
 - `review` → check the hand-back against the acceptance criteria. Accept: set `status: done`, close the pane (`herdr pane close <task_pane>`). Not accepted: log what is missing as an answer (`An: not yet: …`), set `status: working`, prompt the pane to continue.
@@ -126,6 +126,7 @@ Run `herdr agent wait <target>-task --until idle --until done --until blocked` i
 ### Answering
 
 - **You may answer it (§ 3):** check the outcome, the members' files (read only), the wiki or ticket system, or `/agents:ask` another member for a fact. Write `An: …` in the Log, increment `rounds`, set `status: working`, and prompt the pane: `herdr agent prompt <target>-task "Answered in <file>, continue."`
+- **{{PRINCIPAL}} already answered it** in your session, in words that name the thing asked ("also add the release note"): quote those words verbatim as `An: {{PRINCIPAL}} (quoted, HH:MM): "…"`. That is relaying, not approving. A general instruction ("get it done") is not an answer to a gate.
 - **Only {{PRINCIPAL}} can answer it,** or you are unsure: set `status: needs-principal` and put it to {{PRINCIPAL}} in your session. Batch questions across tasks; give each its options and your recommendation. Write the answer into the Log as `An: {{PRINCIPAL}}: …`, then continue as above.
 - **Round limit:** when `rounds` reaches 5, stop answering and bring the task to {{PRINCIPAL}}: the work order is probably wrong.
 

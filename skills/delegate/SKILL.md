@@ -10,10 +10,12 @@ You are a **lead**. You hand one of your members a work order for an outcome the
 
 ## Preconditions (refuse with one line if any fails)
 
+Run **all** of them before writing any file or opening any pane. A refused delegation leaves nothing behind.
+
 1. Run `echo "$HERDR_ENV $HERDR_PANE_ID"`. `HERDR_ENV` must be `1` and `HERDR_PANE_ID` set. Otherwise: `Not inside Herdr — /agents:delegate needs a Herdr pane.`
 2. Workspace root = current working directory; it must contain `agents/`. Caller = the agent active in this session. No agent active → `Only a lead can delegate; start one with /agents:start <name>.`
 3. Target: glob `agents/<name>/context.md` or `agents/*/<name>/context.md` (case-insensitive). Missing or `status: retired` → say so. Its frontmatter `lead:` must equal the caller (case-insensitive) → otherwise `<Target> does not report to <Caller> (no lead: <Caller> in its context.md).` Never look outside this root.
-4. `herdr agent list`: if any agent whose `cwd` is under this root is named `<target>`, `<target>-peer` or `<target>-task` (lowercase), refuse: `<Target> is live in pane <id>; one session per agent. Ask the principal to wrap it, or wait.`
+4. Run `herdr agent list` now and check `.result.agents[]`: if any entry whose `cwd` is under this root has `name` `<target>`, `<target>-peer` or `<target>-task` (lowercase), refuse: `<Target> is live in pane <id>; one session per agent. Ask the principal to wrap it, then delegate again.` Do not offer to issue it anyway and never close that pane yourself: only the principal ends another session. Re-run this check when you delegate again.
 5. Count work orders in flight: files `agents/*/peer/*.md` (and `agents/*/*/peer/*.md`) with `type: task`, `from: <Caller>`, and status `open`, `working`, `question` or `review`. Limit = `task-limit:` in `agents/CONVENTIONS.md` frontmatter, default 3. At the limit → `<Caller> has <n> tasks in flight (limit <n>); finish or stop one first.`
 6. Outcome: name the approved outcome this work serves and where the principal approved it (a tracker row, an outcome file, this session). If you cannot, ask the principal to approve the outcome first and stop.
 7. Harness and model for the target, exactly as `/agents:ask` precondition 4: `harness:` from the target's `context.md`, else `agents/CONVENTIONS.md`, else `claude`; `model:` the same way. Start command: `claude`/`gemini` → `/agents:start`; `codex` → `$agents-start`; `opencode`/`pi`/`cursor` → `/agents-start`.
@@ -24,8 +26,8 @@ You are a **lead**. You hand one of your members a work order for an outcome the
 2. `herdr pane layout --pane "$HERDR_PANE_ID"` → wide → `right`, tall → `down`. `herdr pane split --current --direction <dir> --cwd "$PWD" --no-focus` → read `.result.pane.pane_id`. Write it into `task_pane:`.
 3. `herdr pane rename <id> "<Target> - Task"`.
 4. `herdr agent start <target>-task --kind <harness> --pane <id> -- <agent args>` (same agent args as `/agents:ask` step 4; leave off ` --` when there are none). On `agent_not_ready`, wait once with `herdr agent get`; still blocked → read the pane, tell the principal, stop.
-5. `herdr agent prompt <target>-task "<start> <target> task agents/<Target>/peer/<file>"` — **no `--wait`**: the task can run for hours.
-6. Start watching in the background: `herdr agent wait <target>-task --until idle --until done --until blocked` (Claude Code: Bash with `run_in_background`; other harnesses: check back with `herdr agent get <target>-task` when the principal next speaks).
+5. `herdr agent prompt <target>-task "<start> <target> task agents/<Target>/peer/<file>"` — **no `--wait`**: the task can run for hours. Then `herdr agent wait <target>-task --until working --timeout 60000`: a fresh pane starts idle, so a watch armed before it is working wakes at once.
+6. Start watching in the background: `herdr agent wait <target>-task --until idle --until done --until blocked` (Claude Code: Bash with `run_in_background`; other harnesses: check back with `herdr agent get <target>-task` when the principal next speaks). Each time it wakes and the work order is still `working` while the pane is working again, re-arm it.
 7. Tell the principal in two lines: what was delegated to whom, and the work order path.
 
 When the wait returns, follow task.md § 6 (Watching, Answering, Stopping).
