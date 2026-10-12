@@ -142,8 +142,8 @@ var (
 )
 
 // Starts scans the Claude Code project directory for /agents:start commands
-// and returns the latest start per agent (lowercased name). Peer sessions are
-// not counted: they are another agent's request, not the principal's.
+// and returns the latest start per agent (lowercased name). Peer and task
+// sessions are not counted: another agent started them, not the principal.
 func (c *TranscriptCache) Starts(projectDir string) map[string]Start {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -195,7 +195,7 @@ func scanStarts(path string) []namedStart {
 			continue
 		}
 		args := strings.Fields(string(m[1]))
-		if len(args) == 0 || (len(args) > 1 && strings.EqualFold(args[1], "peer")) {
+		if len(args) == 0 || (len(args) > 1 && (strings.EqualFold(args[1], "peer") || strings.EqualFold(args[1], "task"))) {
 			continue
 		}
 		ts := timestampRe.FindSubmatch(line)

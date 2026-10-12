@@ -46,6 +46,7 @@ Ask the principal to describe:
 - **Who are the key stakeholders?** People the agent needs to track, prepare for, or synthesize input from.
 - **What deliverables does it own?** Concrete artifacts it keeps progressing.
 - **What's in scope and out of scope?** Where are the boundaries?
+- **Does it lead or report to a lead?** A **lead** runs other agents in this workspace: the principal agrees outcomes with it and it hands its members work with `/agents:delegate`. A **member** has `lead: <Lead>` in its `context.md`. Ask only if the workspace already has a lead or the principal describes coordinating others; otherwise skip. Protocol: `${CLAUDE_PLUGIN_ROOT}/template/agents/reference/task.md` (read § 8 if either answer is yes).
 
 After gathering these inputs, draft a complete `role.md` following the structure in CONVENTIONS.md:
 - Role Purpose (one paragraph)
@@ -72,6 +73,8 @@ Based on the approved role, draft an `autonomy.md` with initial authority levels
 - **L1 (Flag):** Strategic decisions, stakeholder relationships, anything out of scope or requiring the principal's authority
 
 Be specific — list concrete action types, not vague categories. The agent will reference this file every session to decide how to behave.
+
+**For a lead**, add: issue a work order inside an approved outcome (suggested L3), approve a member's L2 item inside an approved outcome (suggested L3), define or change an outcome (L2), and at L1 the list that always stays with the principal (task.md § 3: members' L1 items, anything external or irreversible, gates that name the principal, any autonomy change). A lead cannot approve for a member what its own ladder puts above L3.
 
 Present the draft. Iterate until approved.
 
@@ -210,6 +213,7 @@ Once name, role, soul, and autonomy are confirmed, create the full agent structu
    ---
    scope: <scope or workspace name>
    title: <role title>
+   lead: <Lead>          # only if this agent reports to a lead; omit otherwise
    ---
 
    # Context

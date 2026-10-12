@@ -46,6 +46,7 @@ This gives every project these skills:
 | `/agents:doctor` | Health review: startup cost, tracker and memory hygiene, staleness. Read-only, recommends the next commands |
 | `/agents:harness` | Show which CLI each agent runs under — peer sessions and ticks — and whether it is installed. Read-only |
 | `/agents:ask` | Ask another agent in the same workspace (Herdr only): fresh pane, peer session, written reply, pane closed |
+| `/agents:delegate` | A lead hands one of its members a work order (Herdr only): the member does the work in its own pane under its own autonomy, asks the lead its questions, hands back for review |
 | `/agents:schedule` | Unattended tasks: `add`, `list`, `remove`, `enable`, `disable`, `status`, `install` the hourly launchd/cron timer. A gate script runs Claude only when a task is due |
 
 Then, in the repo where you want agents:
@@ -225,6 +226,7 @@ The framework installs two layers of conventions and the runtime skills:
 - **`skills/doctor/SKILL.md`** — Health review (`/agents:doctor`); thresholds mirror the master conventions
 - **`skills/harness/SKILL.md`** — Harness view (`/agents:harness`); which CLI each agent runs under, peer and ticks
 - **`skills/ask/SKILL.md`** — Peer request (`/agents:ask`); protocol in `template/agents/reference/peer.md`
+- **`skills/delegate/SKILL.md`** — Delegated task (`/agents:delegate`); protocol in `template/agents/reference/task.md`
 - **`skills/schedule/SKILL.md`** — Scheduled tasks (`/agents:schedule`); edits `agents/scheduled-tasks.md` and installs the timer from `template/agents/scheduler/`
 - **`skills/new/SKILL.md`** — Builder skill for interactive agent creation (`/agents:new`)
 - **`skills/init/SKILL.md`** — Workspace setup (`/agents:init`; marketplace plugin only — the installer does this job in copied mode)
@@ -315,15 +317,18 @@ Startup is quiet: the agent batches its reads and says nothing until the load is
 
 Leave a session open for two days and the agent still thinks it is two days ago. The plugin ships a hook that runs on every prompt and, when the idle gap passes a limit (`gap-notice:` in `agents/CONVENTIONS.md`, default `2h`, `off` to disable), tells the agent the current time and how long passed. The agent then states the gap and offers to wrap the old session first. Nothing runs while you are away, and nothing wraps without you.
 
-### Three Session Types
+### Four Session Types
 
 | Type | Who starts it | Context | May write |
 |------|---------------|---------|-----------|
 | **Session** | You, with `/agents:start` | Full | Memory, tracker, commits |
 | **Tick** | The scheduler timer | Trimmed | `memory/scheduled/inbox.md` only |
 | **Peer** | Another agent, with `/agents:ask` | Trimmed plus the request file | The reply section of one file in `peer/` |
+| **Task** | The agent's lead, with `/agents:delegate` | Full plus the work order | Like a session (its own files, tracker, a `type: task` memory, commits), answering to the lead |
 
 Ticks and peer sessions never commit, never send anything, and stay at autonomy L3. A human session drains the inbox and glances at `peer/` at its next start.
+
+**Leads.** One agent can run others. Give each member `lead: <Lead>` in its `context.md`. Agree an outcome with the lead; it hands members work orders with `/agents:delegate`, answers their questions itself inside that outcome, and brings you only what it cannot answer or may not approve: each member's L1 items, anything external or irreversible, and any gate that names you. A lead can never approve more than you delegated to it. Limits: `task-limit` tasks in flight per lead (default 3), five question rounds per task, and no task on an agent that is already open. Protocol: `template/agents/reference/task.md`.
 
 ### Scheduler
 

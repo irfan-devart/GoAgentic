@@ -189,6 +189,7 @@ var skills = []skillPaths{
 	{Name: "harness", Canonical: PluginDir + "/skills/harness/SKILL.md", Mirror: "agents/skills/harness/SKILL.md"},
 	{Name: "schedule", Canonical: PluginDir + "/skills/schedule/SKILL.md", Mirror: "agents/skills/schedule/SKILL.md"},
 	{Name: "ask", Canonical: PluginDir + "/skills/ask/SKILL.md", Mirror: "agents/skills/ask/SKILL.md"},
+	{Name: "delegate", Canonical: PluginDir + "/skills/delegate/SKILL.md", Mirror: "agents/skills/delegate/SKILL.md"},
 	{Name: "new", Canonical: PluginDir + "/skills/new/SKILL.md", Mirror: "agents/skills/new/SKILL.md"},
 }
 

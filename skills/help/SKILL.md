@@ -34,6 +34,7 @@ An **agent** is a named, persistent collaborator that lives in this repo as mark
 | `/agents:doctor` | Health review. Finds bloat, stale trackers, missing files. Recommends fixes. Changes nothing. |
 | `/agents:harness` | Show which CLI each agent runs under — peer sessions and ticks — and whether it is installed. Changes nothing. |
 | `/agents:ask <name> "<request>"` | Ask another agent in this workspace. Opens a pane, runs it as a peer, reads its written reply, closes the pane. Herdr only. |
+| `/agents:delegate <name> "<work order>"` | From inside a **lead**: hand a member (an agent whose `context.md` says `lead: <you>`) a work order. It does the work in its own pane under its own autonomy, asks the lead its questions, hands back for review. Herdr only. |
 | `/agents:schedule` | Unattended tasks. `add`, `list`, `remove <id>`, `enable`/`disable <id>`, `status`, `install` (the hourly timer). |
 | `/agents:help <command>` | Details for one command. |
 
@@ -46,7 +47,8 @@ An **agent** is a named, persistent collaborator that lives in this repo as mark
 3. **When you do not know where to go:** `/agents:status` for the whole board, `/agents:next` for the one move. Or, without starting anything, the dashboard (`prefix+a` in Herdr, or `goagentic dash`).
 4. **Once a week or so:** `/agents:doctor`. Run the commands it gives you.
 5. **When one agent needs another:** `/agents:ask <name> "<request>"` from inside the asking agent's session. Same workspace only. The reply lands in `agents/<Name>/peer/`.
-6. **For work that should happen without you:** `/agents:schedule add`, then `/agents:schedule install` once. A timer checks every hour and runs Claude only when a task is due. Results land in the agent's inbox and surface at its next start.
+6. **When you want one agent to run the others:** make it a lead. Give each member `lead: <Lead>` in its `context.md`, agree an outcome with the lead, and it hands out the work with `/agents:delegate`, answers what it can and brings you the rest. See `template/agents/reference/task.md`.
+7. **For work that should happen without you:** `/agents:schedule add`, then `/agents:schedule install` once. A timer checks every hour and runs Claude only when a task is due. Results land in the agent's inbox and surface at its next start.
 
 Always run these from the workspace root (the folder that holds `agents/`).
 

@@ -14,6 +14,8 @@ Agents normally talk to {{PRINCIPAL}}. A **peer request** is one agent asking an
 
 A peer session never writes session memory, never edits the tracker, never commits, never sends email or messages. Its autonomy ceiling is **L3**. Anything that needs more goes back to the caller as `Needs {{PRINCIPAL}}:` in the reply.
 
+A fourth type, the **task** (a lead hands a member a work order with `/agents:delegate`; the member does the work under its own autonomy), shares the `peer/` folder and the Herdr mechanics below. Work orders carry `type: task` and their own statuses; their protocol is `reference/task.md`.
+
 ## Where an agent lives in Herdr
 
 Every Herdr pane carries `HERDR_ENV=1`, `HERDR_PANE_ID`, `HERDR_WORKSPACE_ID`, `HERDR_TAB_ID`. Herdr workspaces are *not* framework workspaces; the framework boundary is the **repo root** (the folder holding `agents/`). `herdr agent list` reports each live agent's `cwd`, and that is the only key the framework uses for scope.

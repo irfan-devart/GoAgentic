@@ -4,6 +4,8 @@ Reference for `agents/CONVENTIONS.md` (the master). Loaded on demand, not at sta
 
 ## Session End Protocol
 
+A **task session** (`reference/task.md` § 5) runs Steps 1–7 at its hand-back with `type: task` and a `task: <work order path>` line in the session memory frontmatter, then writes the hand-back instead of Step 8. A **lead** also stages, in Step 7, the work orders it wrote or answered this session (they sit in its members' `peer/` folders).
+
 Triggered by `/agents:start <name> close`, `/agents:start <name> end`, `/agents:start <name> wrap up`, or when {{PRINCIPAL}} signals the session is ending.
 
 ### Step 1: Review the session

@@ -16,6 +16,7 @@ This master is shared. A workspace's `agents/CONVENTIONS.md` carries frontmatter
 | `gap-notice` | `2h` | Idle gap after which the plugin's hook tells the agent how much time passed (`30m`, `2h`, `1d`, or `off`). See § Stale Sessions. |
 | `harness` | `claude` | The coding-agent CLI that runs unattended ticks and peer panes, and that `goagentic dash` opens agents in: `claude`, `codex`, `gemini`, `opencode`, `pi`, or `cursor`. An agent's `context.md` may set its own `harness:` for peer panes and the dashboard (see § context.md). Interactive sessions work from any harness that has the framework commands installed (see § Invocation). |
 | `model` | *(the CLI's default)* | The model ticks and peer panes run on, passed to the harness as `--model <value>` in that CLI's own syntax (`claude-sonnet-5-5`, `gpt-5`, `openrouter/qwen/qwen3-coder`). An agent's `context.md` may set its own `model:` for peer panes. OpenRouter is a model provider, not a harness: reach it through `opencode` or `pi`. |
+| `task-limit` | `3` | How many delegated tasks one lead may have in flight at once (§ Session Types, `reference/task.md`). |
 
 **Optional `## Agent creation` section.** Steps a workspace adds to every agent `/agents:new` creates: files beyond the standard set, a required field, an external setup step. `/agents:new` runs them in Phase 6 after its own steps, and Phase 7 checks they were done. Write each step as an outcome and name where it lands, for example:
 
@@ -41,6 +42,7 @@ Long procedures live beside this file in `reference/`. In plugin mode that is `$
 | `tracker-cleanup.md` | Asked to clean up the action tracker |
 | `index-maintenance.md` | Updating an INDEX.md at session end |
 | `peer.md` | Asking another agent for something (`/agents:ask`), running as a peer session, or anything Herdr |
+| `task.md` | Setting up a lead, delegating work (`/agents:delegate`), or running as a task session |
 
 ---
 
@@ -80,7 +82,7 @@ agents/<agent-name>/
 │   ├── sessions/        # Per-session logs
 │   └── scheduled/       # Scheduler inbox (only agents with scheduled tasks)
 ├── reference/           # Situational rules and exact detail, read on demand (created when first needed)
-├── peer/                # Agent-to-agent exchanges (created on demand by /agents:ask)
+├── peer/                # Agent-to-agent exchanges and work orders (created on demand by /agents:ask, /agents:delegate)
 └── playbooks/           # Repeatable procedures with defined execution modes
 ```
 
@@ -184,7 +186,7 @@ When {{PRINCIPAL}} asks you to review or clean up your tracker, read `reference/
 
 ### context.md
 
-Frontmatter carries `scope` and `title`. An optional `harness:` (`claude`, `codex`, `gemini`, `opencode`, `pi`, or `cursor`) sets the CLI that runs this agent as a peer in `/agents:ask` and that `goagentic dash` opens it in, and an optional `model:` the model it runs on; each overrides the workspace key of the same name for that agent only (ticks stay on the workspace values). The workspace `model:` applies only to agents on the workspace's harness, since a model name for one CLI means nothing to another. In `goagentic dash`, `c` sets this agent's `harness:` line for you (and drops its `model:` when the harness changes). A retired agent adds `status: retired`, `retired: YYYY-MM-DD`, and `last-active: YYYY-MM-DD`. Retired agents keep their files (history has value) but are hidden from `/agents:list`, `/agents:status`, and `/agents:next` unless `all` is passed. Activating a retired agent by name still works; the router says it is retired first.
+Frontmatter carries `scope` and `title`. An optional `lead: <Name>` makes that agent this one's **lead**: it may hand this agent work orders with `/agents:delegate` (see § Session Types and `reference/task.md`); without the key, no agent can. An optional `harness:` (`claude`, `codex`, `gemini`, `opencode`, `pi`, or `cursor`) sets the CLI that runs this agent as a peer in `/agents:ask` and that `goagentic dash` opens it in, and an optional `model:` the model it runs on; each overrides the workspace key of the same name for that agent only (ticks stay on the workspace values). The workspace `model:` applies only to agents on the workspace's harness, since a model name for one CLI means nothing to another. In `goagentic dash`, `c` sets this agent's `harness:` line for you (and drops its `model:` when the harness changes). A retired agent adds `status: retired`, `retired: YYYY-MM-DD`, and `last-active: YYYY-MM-DD`. Retired agents keep their files (history has value) but are hidden from `/agents:list`, `/agents:status`, and `/agents:next` unless `all` is passed. Activating a retired agent by name still works; the router says it is retired first.
 
 Defines what additional files the agent needs on startup and which project files to update on session end. Frontmatter includes `scope` and `title` (used by `/agents:list`). Body has two sections:
 - **Startup Context** — paths to read after the standard agent files (soul, role, autonomy, actions, memory)
@@ -270,6 +272,7 @@ All agents are invoked through the `/agents:start` router (from the `agents` plu
 /agents:harness               — which CLI each agent runs under (peer + ticks)
 /agents:help [command]        — the guide
 /agents:ask <name> "<request>" — ask a peer agent (Herdr only)
+/agents:delegate <name> "<work order>" — a lead hands a member work (Herdr only)
 ```
 
 The router parses the agent name, finds the agent directory under `agents/<name>/`, executes the startup sequence, and becomes that agent for the session. Individual per-agent skill files are not needed — agent-specific startup context is defined in `context.md`.
@@ -310,15 +313,18 @@ Standard order after the agent directory is identified:
 
 ## Session Types
 
-Not every session is an interactive pairing with {{PRINCIPAL}}. Automated scheduler runs and requests from other agents are **different kinds of session** and must not pollute — or be lost to — the agent's memory. Three types:
+Not every session is an interactive pairing with {{PRINCIPAL}}. Automated scheduler runs and requests from other agents are **different kinds of session** and must not pollute — or be lost to — the agent's memory. Four types:
 
 | Type | Trigger | Context load | Writes |
 |------|---------|--------------|--------|
 | **Session** (interactive) | {{PRINCIPAL}} runs `/agents:start <name>` | Full startup sequence | Session memory, action tracker, commit |
 | **Tick** (automated) | A scheduler fires a due task | **Trimmed** — conventions, soul, name, role, autonomy, tools, actions, standing memory, the inbox, the specific task/playbook, `context.md` startup paths. **Not** the recent-2 session memories | The **inbox only** — never session memory, action tracker, or commit |
 | **Peer** (agent-to-agent) | Another agent in the same workspace runs `/agents:ask` | **Trimmed** like a tick, plus the request file. Runs in a fresh Herdr pane that closes when the reply is written | The **reply section of one file in `peer/`** only. Ceiling L3. See `reference/peer.md` |
+| **Task** (delegated) | The agent's **lead** (its `context.md` has `lead: <Lead>`) runs `/agents:delegate` for an outcome {{PRINCIPAL}} approved | Full startup steps 1–13, plus the work order; no priority declaration. Runs in a fresh Herdr pane until the lead accepts the work | Like a session: its own files, worktree, tracker row, a session memory with `type: task`, a commit of its own paths. Works under its own `autonomy.md` with the lead standing in for {{PRINCIPAL}} inside the outcome; {{PRINCIPAL}}'s own gates stay {{PRINCIPAL}}'s. See `reference/task.md` |
 
 **Why trimmed + inbox-only:** if ticks wrote session memories, a run of thin automated ticks between pairing sessions would flush the substantive interactive sessions out of the recent-2 startup window and rot the agent's context. So ticks stay out of `memory/sessions/` entirely. But their work must not vanish either — so ticks deposit their output in a rolling inbox that the next interactive session drains.
+
+**Why tasks get the full load and write a session memory:** a task is real work on the agent's own files, so it needs the same context and leaves the same trail as a session. Only who it answers to differs: the lead, not {{PRINCIPAL}} directly. Questions only {{PRINCIPAL}} may answer (the agent's L1, anything external or irreversible, gates that name {{PRINCIPAL}}) still go to {{PRINCIPAL}}, through the lead.
 
 **The scheduled-run inbox** (`memory/scheduled/inbox.md`): a rolling, append-only ledger. Ticks append `UNPROCESSED` entries. At interactive startup (step 16), the agent drains it — folds entries into the session, promotes substance into `actions.md` or a memory entry, then flips them to `PROCESSED`. Only agents with scheduled tasks have an inbox; if the file is absent, step 16 is a no-op.
 
@@ -330,7 +336,7 @@ A session left open for hours or days does not know that time passed. The plugin
 
 ## Herdr
 
-When the session runs inside [Herdr](https://herdr.dev) (`HERDR_ENV=1`), the router tags the pane with the agent's name and labels the pane and its tab `<Name> - <Role title>` (a peer session labels only its pane, `<Name> - Peer`), so every live agent is visible by name in the Herdr sidebar and to `/agents:list`, `/agents:status`, and `/agents:doctor`. **Scope is the repo root**, not the Herdr workspace: agents see only live agents whose working directory is under the same root. `/agents:ask <name> "<request>"` is the only sanctioned way for one agent to engage another. Full protocol: `reference/peer.md`.
+When the session runs inside [Herdr](https://herdr.dev) (`HERDR_ENV=1`), the router tags the pane with the agent's name and labels the pane and its tab `<Name> - <Role title>` (a peer session labels only its pane, `<Name> - Peer`), so every live agent is visible by name in the Herdr sidebar and to `/agents:list`, `/agents:status`, and `/agents:doctor`. **Scope is the repo root**, not the Herdr workspace: agents see only live agents whose working directory is under the same root. `/agents:ask <name> "<request>"` (a reply) and, for a lead, `/agents:delegate <name> "<work order>"` (work done) are the only sanctioned ways for one agent to engage another. Full protocols: `reference/peer.md`, `reference/task.md`.
 
 ## Session Priority Declaration
 

@@ -475,6 +475,7 @@ func TestTranscriptStarts(t *testing.T) {
 	write(t, filepath.Join(dir, "b.jsonl"), line("Sigrid close", "2026-09-28T01:00:00Z"))
 	write(t, filepath.Join(dir, "c.jsonl"), line("varro peer peer/req.md", "2026-09-28T05:00:00Z"))
 	write(t, filepath.Join(dir, "d.txt"), line("varro", "2026-09-28T05:00:00Z"))
+	write(t, filepath.Join(dir, "e.jsonl"), line("varro task peer/2026-09-28-0600-task-from-sigrid.md", "2026-09-28T06:00:00Z"))
 
 	c := NewTranscriptCache()
 	starts := c.Starts(dir)
@@ -482,7 +483,7 @@ func TestTranscriptStarts(t *testing.T) {
 		t.Errorf("sigrid started = %s", got)
 	}
 	if _, ok := starts["varro"]; ok {
-		t.Error("peer sessions and non-jsonl files must not count")
+		t.Error("peer and task sessions and non-jsonl files must not count")
 	}
 	// A second pass reuses the cache and gives the same answer.
 	if again := c.Starts(dir); !again["sigrid"].Started.Equal(starts["sigrid"].Started) {

@@ -1,8 +1,8 @@
 ---
-description: Start a workspace agent by name and become it for the session. Use /agents:start <name>, /agents:start <name> <topic>, /agents:start <name> close, or /agents:start <name> peer <file> (peer session, used by /agents:ask). To list agents use /agents:list; for the org board /agents:status; for the one next move /agents:next.
+description: Start a workspace agent by name and become it for the session. Use /agents:start <name>, /agents:start <name> <topic>, /agents:start <name> close, /agents:start <name> peer <file> (peer session, used by /agents:ask), or /agents:start <name> task <file> (delegated task, used by /agents:delegate). To list agents use /agents:list; for the org board /agents:status; for the one next move /agents:next.
 disable-model-invocation: true
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash(date), Bash(echo:*), Bash(ls), Bash(herdr agent rename:*), Bash(herdr pane rename:*), Bash(herdr tab rename:*), Bash(herdr agent list:*), AskUserQuestion
-argument-hint: <name> [topic | close | peer <file>]
+argument-hint: <name> [topic | close | peer <file> | task <file>]
 ---
 
 # /agents:start — Agent Router
@@ -36,6 +36,7 @@ These moved to their own commands. Say so in one line — e.g. "`/agents:start l
 3. If found, execute the **Agent Startup Sequence** below
 4. After startup, handle the remaining arguments as the agent would:
    - If remaining args are `peer <file>` → this is a **peer session** (see below). Do not run the full startup; run the trimmed one
+   - If remaining args are `task <file>` → this is a **task session** (see below)
    - If remaining args are `close` or `end` or `wrap up` → execute **Session End Protocol** (defined in `agents/CONVENTIONS.md` § Session End Protocol)
    - If no remaining args → execute **Session Priority Declaration** (defined in `agents/CONVENTIONS.md` § Session Priority Declaration)
    - If remaining args contain a topic → address it directly
@@ -49,6 +50,7 @@ Show a brief help message:
 /agents:wrap                  — end the active session (from inside it)
 /agents:close                 — end the active session, then clear context
 /agents:ask <name> "<request>"  — ask a peer agent (Herdr only)
+/agents:delegate <name> "<work order>" — a lead hands a member work (Herdr only)
 /agents:list                  — list all agents (add <scope> or all)
 /agents:status                — live status board (add <scope>)
 /agents:next                  — the single next best action (add <scope>)
@@ -74,7 +76,7 @@ Pane: <Name> - <title>          (Herdr only, once)
 Do not start work on a tracker item (opening email, checking a ticket) before that block is printed.
 
 1. Run `date` to establish the current date, time, and day of week. Then run `echo "HERDR_ENV=$HERDR_ENV PANE=$HERDR_PANE_ID TAB=$HERDR_TAB_ID"` — you cannot see environment variables without this; always run it
-   - **Herdr** (the echo shows `HERDR_ENV=1`): read `title:` from the agent's `context.md`, then run `herdr agent rename "$HERDR_PANE_ID" <name lowercased>` and `herdr pane rename "$HERDR_PANE_ID" "<Name> - <title>"`, then `herdr tab rename "$HERDR_TAB_ID" "<Name> - <title>"` (human sessions only; a peer session never renames the tab, it sits in the caller's tab). Ignore errors (e.g. the name is taken by another live pane — then use `<name>-2` and mention it once). If the agent rename returns `agent_launch_pending`, Herdr refuses renames until this session's first turn has ended, so waiting or retrying now cannot work: run the same `herdr agent rename` again, silently, as the first tool call of your next turn (the pane and tab renames are not affected). Report it once, in the block after step 18, not here. If the echo shows `HERDR_ENV=` (empty), skip this line silently
+   - **Herdr** (the echo shows `HERDR_ENV=1`): read `title:` from the agent's `context.md`, then run `herdr agent rename "$HERDR_PANE_ID" <name lowercased>` and `herdr pane rename "$HERDR_PANE_ID" "<Name> - <title>"`, then `herdr tab rename "$HERDR_TAB_ID" "<Name> - <title>"` (human sessions only; a peer or task session never renames the tab, it sits in the caller's tab). Ignore errors (e.g. the name is taken by another live pane — then use `<name>-2` and mention it once). If the agent rename returns `agent_launch_pending`, Herdr refuses renames until this session's first turn has ended, so waiting or retrying now cannot work: run the same `herdr agent rename` again, silently, as the first tool call of your next turn (the pane and tab renames are not affected). Report it once, in the block after step 18, not here. If the echo shows `HERDR_ENV=` (empty), skip this line silently
 2. Read `agents/CONVENTIONS.md` (master first if it `extends` one — see Conventions inheritance above)
 3. Read `soul.md`
 4. Read `name.md`
@@ -90,10 +92,14 @@ Do not start work on a tracker item (opening email, checking a ticket) before th
 14. Playbook index — glob `playbooks/*.md`, read only frontmatter and first paragraph of each (not full steps)
 15. Trigger check — evaluate each playbook's trigger against today's date, day of week, and session context. Flag any that should execute this session
 16. Drain the scheduled-run inbox — if `memory/scheduled/inbox.md` exists, read it. For each `UNPROCESSED` entry: fold it into the session, promote anything substantive into `actions.md` or a memory entry, then flip it to `PROCESSED`. Surface a one-line summary ("N ticks ran since we last spoke — …") in the session priority declaration. Absent file = no-op. See `agents/CONVENTIONS.md` § Session Types
-17. Peer glance — if `peer/` exists, list files with `status: open` or `status: answered`. Mention them in one line in the priority declaration ("2 peer replies since last session"); read only what the session needs. Do not drain them into the tracker unless the principal says so. Absent folder = no-op
+17. Peer glance — if `peer/` exists, list files with `status: open` or `status: answered`. Mention them in one line in the priority declaration ("2 peer replies since last session"); read only what the session needs. Do not drain them into the tracker unless the principal says so. Absent folder = no-op. **Leads** (any agent named in another agent's `lead:`): also list work orders `from: <you>` with `type: task` anywhere in this workspace (`agents/*/peer/`, `agents/*/*/peer/`) whose status is not `done` or `stopped`, one line each with its status: your work in flight. **Members** (Herdr only): if `herdr agent list` shows `<name>-task` live under this root, warn in one line that this agent has a delegated task running in another pane, and that two sessions on one tracker fight; the principal decides
 18. Hygiene check — from what you just read, note: number of files in `memory/standing/` (limit 5), number of files in `memory/sessions/` (limit 10), size of `actions.md` (limit 20 KB), and whether the `Last reviewed:` line is longer than one short line. If any limit is broken, print **one line** before the priority declaration, e.g. `⚠️ Hygiene: standing memory has 9 files (limit 5) — run /agents:doctor <name>, then /agents:start <name> consolidate memory.` If all pass, say nothing.
 
 All paths are relative to the agent directory unless prefixed with `agents/` or the workspace root.
+
+## Task Session (`/agents:start <name> task <file>`)
+
+Your lead handed you a work order. You are not in a conversation with the principal; you answer to the lead, inside the outcome the principal approved. Load steps 1–13 above (in step 1 the Herdr names are `<name>-task` and `"<Name> - Task"`, and do **not** rename the tab; skip steps 14–18 and the priority declaration). Then read `${CLAUDE_PLUGIN_ROOT}/template/agents/reference/task.md` (same fallbacks as the conventions master) §§ 3–5 and follow it: set the work order to `working`, do the work under your own `autonomy.md` with the lead standing in for the principal inside the outcome (never for the principal's own gates), ask questions in its `## Log` and end your turn with `status: question`, and when done run the Session End Protocol with `type: task`, write the hand-back, and set `status: review`. When the lead prompts you to continue, re-read the work order's Log first.
 
 ## Peer Session (`/agents:start <name> peer <file>`)
 

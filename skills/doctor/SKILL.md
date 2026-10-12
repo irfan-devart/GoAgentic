@@ -65,6 +65,8 @@ Always name the **single biggest file** and its share. That is the fix.
 - ⚠️ a path under `## Startup Context` points into the agent's `reference/` (reference files are read on demand, never at startup).
 - ⚠️ `memory/scheduled/inbox.md` exists and has `UNPROCESSED` entries (count them). Count only entry headings (`### <timestamp> — <task> — UNPROCESSED` with a real date); the file's format header mentions the word too, and that is not an entry.
 - ⚠️ `peer/` has more than 10 files (fix: tracker cleanup archives them; `peer/archive/` is not counted), or any file with `status: open` older than 7 days (an exchange that failed or a handover nobody picked up; if the file already holds a reply, only its status is stale). Name the `needs-principal` files: they wait on the principal.
+- ⚠️ `lead:` in `context.md` names an agent that is missing or retired, or the agent itself: its lead cannot delegate to it (fix: correct the key or remove it).
+- ⚠️ a work order (`peer/*.md` with `type: task`) in `working`, `question` or `review` for more than 3 days, or in `needs-principal` (name it: it waits on the principal). A `working` order whose `task_pane` is not in `herdr agent list` (Herdr only) lost its pane: the lead re-prompts or stops it (`reference/task.md` § 6).
 - ⚠️ a playbook (`playbooks/*.md`) has no `## Trigger` section. ℹ️ `playbooks/` is empty (normal for a new agent; mention once, no fix needed).
 - ℹ️ active agent whose `Last reviewed` is > 60 days old: suggest retiring it (`status: retired` in `context.md`).
 
@@ -77,7 +79,8 @@ Always name the **single biggest file** and its share. That is the fix.
 - ⚠️ `harness:` in `agents/CONVENTIONS.md` frontmatter, or in any agent's `context.md` frontmatter, is set to a CLI that is not on PATH (`claude`, `codex`, `gemini`, `opencode`, `pi`, or `cursor`, whose CLI is `cursor-agent`), or to a name that is none of these: ticks and peer panes would fail.
 - ℹ️ `git status --short agents/` shows uncommitted changes (list the count only).
 - ⚠️ two or more active agents' `tools.md` (or `context.md`) name the same code repository path outside the workspace and it is not a `<repo>.wt/<agent>` worktree path: they share one checkout. Fix: each owner moves to its own worktree (master conventions § Code Repositories).
-- ❌ (Herdr only: run `echo "$HERDR_ENV"`; if `1`) `herdr agent list` shows the same agent name live in two or more panes whose `cwd` is under this root — two sessions share one tracker. Name the panes. Ignore other roots.
+- ❌ (Herdr only: run `echo "$HERDR_ENV"`; if `1`) `herdr agent list` shows the same agent name live in two or more panes whose `cwd` is under this root — two sessions share one tracker. Name the panes. The same holds when `<name>` and `<name>-task` are both live (a human session beside a delegated task). Ignore other roots.
+- ⚠️ a lead has more work orders in flight (`open`, `working`, `question`, `review`) than `task-limit` (default 3).
 
 ## Output
 
