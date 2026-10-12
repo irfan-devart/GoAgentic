@@ -74,7 +74,7 @@ Based on the approved role, draft an `autonomy.md` with initial authority levels
 
 Be specific — list concrete action types, not vague categories. The agent will reference this file every session to decide how to behave.
 
-**For a lead**, add: issue a work order inside an approved outcome (suggested L3), approve a member's L2 item inside an approved outcome (suggested L3), define or change an outcome (L2), and at L1 the list that always stays with the principal (task.md § 3: members' L1 items, anything external or irreversible, gates that name the principal, any autonomy change). A lead cannot approve for a member what its own ladder puts above L3.
+**For a lead**, add: issue a work order inside an approved outcome (suggested L3), approve a member's L2 item inside an approved outcome (suggested L3), define or change an outcome (L2), and at L1 the list that always stays with the principal (task.md § 3: members' L1 items, anything external or irreversible, gates that name the principal, any autonomy change). A lead cannot approve for a member what its own ladder puts above L3. A lead's role also says it keeps each outcome's state in `outcomes/<slug>.md` (task.md § 2), sizes work orders to one session, and wraps between phases.
 
 Present the draft. Iterate until approved.
 

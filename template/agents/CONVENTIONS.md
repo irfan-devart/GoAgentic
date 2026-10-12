@@ -84,6 +84,7 @@ agents/<agent-name>/
 │   └── scheduled/       # Scheduler inbox (only agents with scheduled tasks)
 ├── reference/           # Situational rules and exact detail, read on demand (created when first needed)
 ├── peer/                # Agent-to-agent exchanges and work orders (created on demand by /agents:ask, /agents:delegate)
+├── outcomes/            # Leads only: one file per outcome the principal approved (reference/task.md § 2)
 └── playbooks/           # Repeatable procedures with defined execution modes
 ```
 

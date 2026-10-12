@@ -16,7 +16,31 @@ Everything here is a no-op outside Herdr (`HERDR_ENV` unset), like peer requests
 
 ## 2. Outcomes are the boundary
 
-Before a lead issues work, {{PRINCIPAL}} approves the **outcome**: goal, acceptance criteria, scope, and which member does which part. The lead records it (its tracker row or an outcome file) and every work order names it in `outcome:`. The approved outcome is the limit of the lead's authority: anything outside it goes back to {{PRINCIPAL}} as a scope change.
+Before a lead issues work, {{PRINCIPAL}} approves the **outcome**: goal, acceptance criteria, scope, and which member does which part. The lead records it in an **outcome file** and every work order names that file in `outcome:`. The approved outcome is the limit of the lead's authority: anything outside it goes back to {{PRINCIPAL}} as a scope change.
+
+**The outcome file holds the state, not the lead's conversation.** `agents/<Lead>/outcomes/<slug>.md`, one per outcome, with a tracker row pointing to it:
+
+```markdown
+---
+outcome: <one line>
+approved: YYYY-MM-DD by {{PRINCIPAL}}
+status: active | done | dropped
+---
+
+## Definition
+<goal, acceptance criteria, scope in/out, which member does which part>
+
+## Plan
+<the steps and the work order each became, with its path and status>
+
+## Decisions
+<dated: {{PRINCIPAL}}'s answers (quoted), the lead's answers that set direction, settled peer replies>
+
+## Next
+<the one next step, so a fresh session can pick up>
+```
+
+Update it as things happen (a work order issued, accepted or stopped; a decision; an answer from {{PRINCIPAL}}), not at the end. A lead whose state lives in this file can wrap at any point and pick up in a fresh session. That is the point: a lead's conversation fills fast (every question, answer and review lands in it), so it should wrap between phases the way any session does, and never carry an outcome in its head.
 
 ## 3. Authority in a task
 
@@ -68,6 +92,8 @@ due: YYYY-MM-DD HH:MM
 
 The work order must be self-contained, like a peer request: the target has its own memory, not the lead's conversation.
 
+**Size: one session's work.** A member loads its full context, does the work and wraps, all in one session, and should finish with plenty of room: aim for a task the member can wrap well under half its context window. A bigger outcome becomes several work orders, issued one after another (each builds on the last hand-back) or to different members. When in doubt, split: two small hand-backs cost less than one session that runs out of room before its wrap.
+
 **Statuses.**
 
 | Status | Set by | Meaning |
@@ -104,6 +130,8 @@ Started by the lead as `/agents:start <target> task <file>` in a fresh pane. The
 3. **When you need an answer:** write `Qn: …` in the Log (`Qn (needs {{PRINCIPAL}}): …` when § 3 says only {{PRINCIPAL}} can give it), set `status: question`, and **end your turn**. The lead answers in the Log and prompts you to continue. Never guess past an approval gate to keep moving.
 4. **When you are done:** run the Session End Protocol (`reference/session-end.md`) Steps 1–7 with these differences: the session memory has `type: task` and a `task: <work order path>` line in its frontmatter; Step 6 (project files) only for files the work order names; Step 7 stages your own paths, which include this work order (it lives in your `peer/` folder). Then write the hand-back in the Log (what was delivered, each acceptance criterion met or not, commit/PR ids) and set `status: review`. End your turn.
 5. If you cannot continue (a blocker no answer fixes, or the work turns out to be outside the outcome), log it as a question; the lead decides whether to stop.
+6. **If the work is bigger than one session** (your context is filling, or you can see the rest will not fit), stop at a clean point: commit what works, run step 4 as a **partial hand-back** that lists what is done and what is left, and set `status: review`. The lead accepts the part and issues the rest as a new work order, which starts a fresh session. Never push on until you cannot wrap properly: the wrap is what keeps your memory useful.
+7. **Rework.** If the lead sends the hand-back back (`An: not yet: …`), fix it and hand back again; at that second step 4, **update the session memory you wrote at the first hand-back** (same file: add what changed and why) rather than writing a second one, and commit again.
 
 A task session never sends anything outside the workspace that its ladder does not already allow, never edits another agent's files, and never delegates.
 
@@ -134,7 +162,7 @@ After the start prompt, wait for the pane to reach `working` (`herdr agent wait 
 
 - **You may answer it (§ 3):** check the outcome, the members' files (read only), the wiki or ticket system, or `/agents:ask` another member for a fact. Write `An: …` in the Log, increment `rounds`, set `status: working`, and prompt the pane: `herdr agent prompt <target>-task "Answered in <file>, continue."`
 - **{{PRINCIPAL}} already answered it** in your session, in words that name the thing asked ("also add the release note"): quote those words verbatim as `An: {{PRINCIPAL}} (quoted, HH:MM): "…"`. That is relaying, not approving. A general instruction ("get it done") is not an answer to a gate.
-- **Only {{PRINCIPAL}} can answer it,** or you are unsure: set `status: needs-principal` and put it to {{PRINCIPAL}} in your session. Batch questions across tasks; give each its options and your recommendation. Write the answer into the Log as `An: {{PRINCIPAL}}: …`, then continue as above.
+- **Only {{PRINCIPAL}} can answer it,** or you are unsure: set `status: needs-principal` and put it to {{PRINCIPAL}} in your session. Batch questions across tasks; give each its options and your recommendation. Write the answer into the Log as `An: {{PRINCIPAL}}: …` and into the outcome file's Decisions, then continue as above.
 - **Round limit:** when `rounds` reaches 5 (answers and rejected hand-backs together), stop answering and bring the task to {{PRINCIPAL}}: the work order is probably wrong. Only {{PRINCIPAL}} raises it for a task (`An: {{PRINCIPAL}}: 3 more rounds`).
 
 Never edit the target's files, worktree or tracker yourself. You direct through the work order.
@@ -145,11 +173,13 @@ The lead (or {{PRINCIPAL}}) can stop a task: log why, set `status: stopped`, pro
 
 ### At the lead's session end
 
-Stage the work orders you wrote or answered this session (they sit in your members' `peer/` folders) along with your own paths: `git add agents/<Lead>/ agents/<Target>/peer/<file> …`. The target commits its own copy at its hand-back; whichever commit is later carries the final state.
+Bring each active outcome file up to date (Plan statuses, Decisions, Next), then stage the work orders you wrote or answered this session (they sit in your members' `peer/` folders) along with your own paths: `git add agents/<Lead>/ agents/<Target>/peer/<file> …`. The target commits its own copy at its hand-back; whichever commit is later carries the final state.
+
+**Wrap mid-outcome freely.** Members keep working in their panes after you wrap; whatever needs you (a question, a hand-back, an overdue task) waits in its work order until your next session picks it up. Wrap between phases, and whenever your session is getting long, as any session would.
 
 ### At the lead's startup
 
-In the peer glance (startup step 17), also list work orders `from: <you>` anywhere in this workspace that are not `done` or `stopped`, with their status: they are the lead's work in flight.
+In the peer glance (startup step 17), also list work orders `from: <you>` anywhere in this workspace that are not `done` or `stopped`, with their status: they are the lead's work in flight. Read the outcome file of each `active` outcome (its Next line first): that, not the last session's conversation, is where the outcome stands. Re-arm a background wait for each task pane still live.
 
 ## 7. When the principal opens a member directly
 
@@ -160,3 +190,4 @@ If {{PRINCIPAL}} starts a member while `<member>-task` is live, the router warns
 1. Create the lead with `/agents:new`. Its role names its members and outcomes; its autonomy ladder carries "issue a work order inside an approved outcome" (suggested L3) and "approve a member's L2 item inside an approved outcome" (suggested L3), plus the § 3 always-the-principal list at L1.
 2. Add `lead: <Lead>` to each member's `context.md` frontmatter, and one line to each member's `role.md` reporting section: "Takes work orders from <Lead> for outcomes {{PRINCIPAL}} approved; brings questions to <Lead> first; {{PRINCIPAL}} keeps final authority."
 3. Optional: `task-limit: <n>` and `task-timebox: <duration>` in `agents/CONVENTIONS.md` frontmatter.
+4. The lead keeps its outcome files in `agents/<Lead>/outcomes/` (created with the first outcome).

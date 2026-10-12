@@ -18,6 +18,7 @@ Scan the full conversation and identify:
 - Communications sent or received
 - Documents created, updated, or shared
 - Any changes to project state
+- Peer replies (`/agents:ask`) used this session that settled something lasting: each gets a line in the session memory, tracker or (for a lead) outcome file — the reply file alone is not memory (`reference/peer.md`)
 - **Session focus reconciliation:** Which declared focus items were addressed? Which were not, and why? Did any side topics emerge that need P1/P2 actions?
 
 ### Step 2: Update action tracker

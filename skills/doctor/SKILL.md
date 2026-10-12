@@ -81,6 +81,7 @@ Always name the **single biggest file** and its share. That is the fix.
 - ⚠️ two or more active agents' `tools.md` (or `context.md`) name the same code repository path outside the workspace and it is not a `<repo>.wt/<agent>` worktree path: they share one checkout. Fix: each owner moves to its own worktree (master conventions § Code Repositories).
 - ❌ (Herdr only: run `echo "$HERDR_ENV"`; if `1`) `herdr agent list` shows the same agent name live in two or more panes whose `cwd` is under this root — two sessions share one tracker. Name the panes. The same holds when `<name>` and `<name>-task` are both live (a human session beside a delegated task). Ignore other roots.
 - ⚠️ a lead has more work orders in flight (`open`, `working`, `question`, `review`) than `task-limit` (default 3).
+- ⚠️ a work order whose `outcome:` names an outcome file that does not exist, or a lead's `outcomes/*.md` with `status: active` and no work order in flight and no `## Next` line (stalled or unfinished bookkeeping).
 - ⚠️ a work order in flight whose `due:` has passed, or whose `rounds` is 5 or more: its lead should have stopped it and asked the principal (`reference/task.md` § 6).
 
 ## Output

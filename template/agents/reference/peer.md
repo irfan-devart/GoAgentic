@@ -54,6 +54,8 @@ caller_pane: w1:p3
 
 The folder is created on demand and is tracked in git. The caller's human session commits it at session end. It is **not** the inbox: `memory/scheduled/` is the scheduler's channel and stays untouched.
 
+**A reply is not memory.** The asked agent keeps nothing from the exchange, and the reply file sits in `peer/` until it is archived. When a reply settles something the caller will need again (a decision, a fact, a review verdict that sets a rule), the caller records it at its wrap: one line in its session memory or tracker row, a standing memory if it is durable, or, for a lead, the outcome file's Decisions. Point to the reply file for the detail.
+
 At interactive startup (step 17) an agent glances at `peer/` files with `status: answered` or `open` newer than its last session and folds anything substantive into the session.
 
 **Statuses.** `open` (written, no reply yet) → `answered` (reply written) or `needs-principal` (reply written, part of it needs {{PRINCIPAL}}) → `done` (nothing more is owed by anyone). The caller sets `done` once it has used the reply; the target sets `done` on a one-way handover once it has read it (a file that says "no reply owed" starts life as `open` and is `done` after reading). Older files may say `closed` or `complete`: treat them as `done`.
