@@ -328,7 +328,7 @@ Leave a session open for two days and the agent still thinks it is two days ago.
 
 Ticks and peer sessions never commit, never send anything, and stay at autonomy L3. A human session drains the inbox and glances at `peer/` at its next start.
 
-**Leads.** One agent can run others. Give each member `lead: <Lead>` in its `context.md`. Agree an outcome with the lead; it hands members work orders with `/agents:delegate`, answers their questions itself inside that outcome, and brings you only what it cannot answer or may not approve: each member's L1 items, anything external or irreversible, and any gate that names you. A lead can never approve more than you delegated to it. Limits: `task-limit` tasks in flight per lead (default 3), five question rounds per task, and no task on an agent that is already open. Protocol: `template/agents/reference/task.md`.
+**Leads.** One agent can run others. Give each member `lead: <Lead>` in its `context.md`. Agree an outcome with the lead; it hands members work orders with `/agents:delegate`, answers their questions itself inside that outcome, and brings you only what it cannot answer or may not approve: each member's L1 items, anything external or irreversible, and any gate that names you. A lead can never approve more than you delegated to it. Limits: `task-limit` tasks in flight per lead (default 3), five rounds per task (answers and rejected hand-backs), a `task-timebox` per task (default 4 hours; only you extend it), and no task on an agent that is already open. These are rules the agents follow, not a hard stop: `/agents:doctor` flags any task past its limits. Protocol: `template/agents/reference/task.md`.
 
 ### Scheduler
 

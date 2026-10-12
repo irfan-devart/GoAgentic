@@ -51,6 +51,8 @@ outcome: <the approved outcome, one line, and where it is recorded>
 lead_pane: <the lead's HERDR_PANE_ID>
 task_pane: <the task pane id>
 rounds: 0
+timebox: 4h
+due: YYYY-MM-DD HH:MM
 ---
 
 ## Work order
@@ -61,6 +63,8 @@ rounds: 0
 
 <the target appends progress, questions and the hand-back; the lead appends answers>
 ```
+
+`rounds` counts the lead's answers and rejected hand-backs (§ 6). `timebox` is how long the task may run, from `task-timebox` in `agents/CONVENTIONS.md` frontmatter (default `4h`); a longer one only when {{PRINCIPAL}} set it in the outcome. `due` is `date` plus `timebox`, written once so nobody has to work it out again. Waiting on {{PRINCIPAL}} counts: the clock does not pause.
 
 The work order must be self-contained, like a peer request: the target has its own memory, not the lead's conversation.
 
@@ -94,6 +98,8 @@ The work order must be self-contained, like a peer request: the target has its o
 Started by the lead as `/agents:start <target> task <file>` in a fresh pane. The router loads the full startup (steps 1–13: including the two most recent sessions, since this is real work), skips the priority declaration, the playbook trigger check and the hygiene line, then hands over here.
 
 1. Read the work order. Set `status: working` and log a one-line plan.
+
+   **Every time you start a turn** (the first one, and each time the lead prompts you to continue), run `date` and compare it with `due:`. Past due: stop work, log `Timebox reached at HH:MM: <what is done, what is not>`, set `status: question`, and end your turn. Do not start new work past due, even to finish.
 2. Do the work under your own ladder (§ 3). Use your own worktree for code (master § Code Repositories). Keep your own tracker row for the work: add one if none exists, with the work order's path in the Action cell.
 3. **When you need an answer:** write `Qn: …` in the Log (`Qn (needs {{PRINCIPAL}}): …` when § 3 says only {{PRINCIPAL}} can give it), set `status: question`, and **end your turn**. The lead answers in the Log and prompts you to continue. Never guess past an approval gate to keep moving.
 4. **When you are done:** run the Session End Protocol (`reference/session-end.md`) Steps 1–7 with these differences: the session memory has `type: task` and a `task: <work order path>` line in its frontmatter; Step 6 (project files) only for files the work order names; Step 7 stages your own paths, which include this work order (it lives in your `peer/` folder). Then write the hand-back in the Log (what was delivered, each acceptance criterion met or not, commit/PR ids) and set `status: review`. End your turn.
@@ -119,8 +125,9 @@ All checks run before anything is written: a refused delegation leaves no file a
 After the start prompt, wait for the pane to reach `working` (`herdr agent wait <target>-task --until working --timeout 60000`): a fresh pane starts idle. Then run `herdr agent wait <target>-task --until idle --until done --until blocked` in the background (Claude Code: Bash with `run_in_background`), so you are woken when the task pane stops. Then read the work order:
 
 - `question` → answer (below).
-- `review` → check the hand-back against the acceptance criteria. Accept: set `status: done`, close the pane (`herdr pane close <task_pane>`). Not accepted: log what is missing as an answer (`An: not yet: …`), set `status: working`, prompt the pane to continue.
+- `review` → check the hand-back against the acceptance criteria. Accept: set `status: done`, close the pane (`herdr pane close <task_pane>`). Not accepted: log what is missing as an answer (`An: not yet: …`), **increment `rounds`**, set `status: working`, prompt the pane to continue. A rejected hand-back is a round like any answer.
 - `working` but the pane is idle → the target ended its turn without a status change; read the pane (`herdr agent read <target>-task --source recent-unwrapped --lines 60`) and prompt it to update the work order.
+- **Past `due`**, whatever the status (check with `date` on every wake, and at your startup): stop the task (below) and bring it to {{PRINCIPAL}} with what was done, what was not, and your recommendation (extend, re-scope, or drop). Only {{PRINCIPAL}} extends a timebox: write the new `due:` and log `An: {{PRINCIPAL}}: extended to HH:MM`. You never extend it yourself.
 - `blocked` → the task pane hit a permission prompt. Never answer another agent's approval prompt: tell {{PRINCIPAL}} which pane and what it asks.
 
 ### Answering
@@ -128,7 +135,7 @@ After the start prompt, wait for the pane to reach `working` (`herdr agent wait 
 - **You may answer it (§ 3):** check the outcome, the members' files (read only), the wiki or ticket system, or `/agents:ask` another member for a fact. Write `An: …` in the Log, increment `rounds`, set `status: working`, and prompt the pane: `herdr agent prompt <target>-task "Answered in <file>, continue."`
 - **{{PRINCIPAL}} already answered it** in your session, in words that name the thing asked ("also add the release note"): quote those words verbatim as `An: {{PRINCIPAL}} (quoted, HH:MM): "…"`. That is relaying, not approving. A general instruction ("get it done") is not an answer to a gate.
 - **Only {{PRINCIPAL}} can answer it,** or you are unsure: set `status: needs-principal` and put it to {{PRINCIPAL}} in your session. Batch questions across tasks; give each its options and your recommendation. Write the answer into the Log as `An: {{PRINCIPAL}}: …`, then continue as above.
-- **Round limit:** when `rounds` reaches 5, stop answering and bring the task to {{PRINCIPAL}}: the work order is probably wrong.
+- **Round limit:** when `rounds` reaches 5 (answers and rejected hand-backs together), stop answering and bring the task to {{PRINCIPAL}}: the work order is probably wrong. Only {{PRINCIPAL}} raises it for a task (`An: {{PRINCIPAL}}: 3 more rounds`).
 
 Never edit the target's files, worktree or tracker yourself. You direct through the work order.
 
@@ -152,4 +159,4 @@ If {{PRINCIPAL}} starts a member while `<member>-task` is live, the router warns
 
 1. Create the lead with `/agents:new`. Its role names its members and outcomes; its autonomy ladder carries "issue a work order inside an approved outcome" (suggested L3) and "approve a member's L2 item inside an approved outcome" (suggested L3), plus the § 3 always-the-principal list at L1.
 2. Add `lead: <Lead>` to each member's `context.md` frontmatter, and one line to each member's `role.md` reporting section: "Takes work orders from <Lead> for outcomes {{PRINCIPAL}} approved; brings questions to <Lead> first; {{PRINCIPAL}} keeps final authority."
-3. Optional: `task-limit: <n>` in `agents/CONVENTIONS.md` frontmatter.
+3. Optional: `task-limit: <n>` and `task-timebox: <duration>` in `agents/CONVENTIONS.md` frontmatter.

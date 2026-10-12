@@ -17,6 +17,7 @@ This master is shared. A workspace's `agents/CONVENTIONS.md` carries frontmatter
 | `harness` | `claude` | The coding-agent CLI that runs unattended ticks and peer panes, and that `goagentic dash` opens agents in: `claude`, `codex`, `gemini`, `opencode`, `pi`, or `cursor`. An agent's `context.md` may set its own `harness:` for peer panes and the dashboard (see § context.md). Interactive sessions work from any harness that has the framework commands installed (see § Invocation). |
 | `model` | *(the CLI's default)* | The model ticks and peer panes run on, passed to the harness as `--model <value>` in that CLI's own syntax (`claude-sonnet-5-5`, `gpt-5`, `openrouter/qwen/qwen3-coder`). An agent's `context.md` may set its own `model:` for peer panes. OpenRouter is a model provider, not a harness: reach it through `opencode` or `pi`. |
 | `task-limit` | `3` | How many delegated tasks one lead may have in flight at once (§ Session Types, `reference/task.md`). |
+| `task-timebox` | `4h` | How long one delegated task may run before the lead stops it and brings it to {{PRINCIPAL}}; only {{PRINCIPAL}} extends it (`reference/task.md`). |
 
 **Optional `## Agent creation` section.** Steps a workspace adds to every agent `/agents:new` creates: files beyond the standard set, a required field, an external setup step. `/agents:new` runs them in Phase 6 after its own steps, and Phase 7 checks they were done. Write each step as an outcome and name where it lands, for example:
 

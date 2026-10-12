@@ -22,7 +22,7 @@ Run **all** of them before writing any file or opening any pane. A refused deleg
 
 ## Steps
 
-1. `date` → stamp `YYYY-MM-DD-HHMM`. `mkdir -p agents/<Target>/peer`. Write `agents/<Target>/peer/<stamp>-task-from-<Caller>.md` with the frontmatter from task.md § 4 (`type: task`, `status: open`, `outcome:`, `lead_pane: $HERDR_PANE_ID`, `rounds: 0`) and a self-contained `## Work order`: deliverable, acceptance criteria, every path/ticket/branch/ID, out of scope, who else is involved. End with an empty `## Log`.
+1. `date` → stamp `YYYY-MM-DD-HHMM`. `mkdir -p agents/<Target>/peer`. Write `agents/<Target>/peer/<stamp>-task-from-<Caller>.md` with the frontmatter from task.md § 4 (`type: task`, `status: open`, `outcome:`, `lead_pane: $HERDR_PANE_ID`, `rounds: 0`, `timebox:` from `task-timebox:` in `agents/CONVENTIONS.md` frontmatter (default `4h`; longer only if the principal set it in the outcome), and `due:` = now + timebox as `YYYY-MM-DD HH:MM`) and a self-contained `## Work order`: deliverable, acceptance criteria, every path/ticket/branch/ID, out of scope, who else is involved. End with an empty `## Log`.
 2. `herdr pane layout --pane "$HERDR_PANE_ID"` → wide → `right`, tall → `down`. `herdr pane split --current --direction <dir> --cwd "$PWD" --no-focus` → read `.result.pane.pane_id`. Write it into `task_pane:`.
 3. `herdr pane rename <id> "<Target> - Task"`.
 4. `herdr agent start <target>-task --kind <harness> --pane <id> -- <agent args>` (same agent args as `/agents:ask` step 4; leave off ` --` when there are none). On `agent_not_ready`, wait once with `herdr agent get`; still blocked → read the pane, tell the principal, stop.
@@ -30,7 +30,7 @@ Run **all** of them before writing any file or opening any pane. A refused deleg
 6. Start watching in the background: `herdr agent wait <target>-task --until idle --until done --until blocked` (Claude Code: Bash with `run_in_background`; other harnesses: check back with `herdr agent get <target>-task` when the principal next speaks). Each time it wakes and the work order is still `working` while the pane is working again, re-arm it.
 7. Tell the principal in two lines: what was delegated to whom, and the work order path.
 
-When the wait returns, follow task.md § 6 (Watching, Answering, Stopping).
+When the wait returns, run `date`, and follow task.md § 6 (Watching, Answering, Stopping): past `due:` means stop and bring it to the principal; 5 `rounds` (answers plus rejected hand-backs) means stop answering and bring it to the principal.
 
 ## Rules
 
