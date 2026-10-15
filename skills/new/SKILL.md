@@ -117,6 +117,8 @@ Once name, role, soul, and autonomy are confirmed, create the full agent structu
    agents/<name>/
    ```
 
+   `<name>` is the agent's name exactly as written in `name.md`, capitalised (`agents/Sigrid/`, never `agents/sigrid/`). Only the Herdr agent name is lowercase.
+
    Contents (same for both layouts):
    ```
    ├── role.md
