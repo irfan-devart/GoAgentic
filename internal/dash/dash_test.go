@@ -400,7 +400,8 @@ func TestSnapshotAndJSON(t *testing.T) {
 	WriteSnapshot(&buf, ws, 120, true, NewStyles(true))
 	out := buf.String()
 	for _, want := range []string{
-		"✋ 3 for you", "● Sigrid", "● Varro", "Waiting on Norman:", "Sigrid #5 Tidy memory and links", "Sigrid #6 Sign the contract",
+		"✋ 3 for you", "● Sigrid", "  Varro", // health fails, nothing blocked: no dot
+		"Waiting on Norman:", "Sigrid #5 Tidy memory and links", "Sigrid #6 Sign the contract",
 		"1 scheduled run(s) not yet read",
 		"» #3 ship the thing → #5 tidy", // the agent's own plan wins
 		"(no open actions)",
@@ -1017,5 +1018,20 @@ func TestHarnessMenuSavesWithoutOpening(t *testing.T) {
 	if m.menu != nil || scans != 1 || harnessOf(m.ws, m.selected()) != "codex" ||
 		m.status != "Sigrid → codex; it is running now, so this applies from its next start" {
 		t.Errorf("after save: scans %d, status %q", scans, m.status)
+	}
+}
+
+func TestRedMeansBlockedOnly(t *testing.T) {
+	tr := parseActions("## Open\n\n| # | Action | Owner | Priority | Due/Target | Status |\n|---|---|---|---|---|---|\n" +
+		"| 1 | Late | A | P1 | 2026-09-01 | In progress |\n")
+	ws := &Workspace{Principal: "Norman Noble", Scanned: now}
+	overdue := &Agent{Open: tr.open, Health: Health{Level: Fail}}
+	if got := agentTone(ws, overdue); got == toneBlocked {
+		t.Error("an overdue item or a health failure alone must not turn the dot red")
+	}
+	tr = parseActions("## Open\n\n| # | Action | Owner | Priority | Due/Target | Status |\n|---|---|---|---|---|---|\n" +
+		"| 1 | Quote | A | P1 | | Waiting on Ivan — reply |\n")
+	if got := agentTone(ws, &Agent{Open: tr.open}); got != toneBlocked {
+		t.Errorf("a P1 waiting on someone else: tone = %v, want red", got)
 	}
 }

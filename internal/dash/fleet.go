@@ -194,7 +194,7 @@ func FleetRow(ws *Workspace, width int, selected bool, st Styles) string {
 	}
 	mark := " "
 	switch workspaceTone(ws) {
-	case toneProblem:
+	case toneBlocked:
 		mark = st.Fail.Render("●")
 	case toneForYou:
 		mark = st.Warn.Render("●")

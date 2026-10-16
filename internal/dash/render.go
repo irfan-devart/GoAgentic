@@ -193,7 +193,7 @@ func TableRow(ws *Workspace, a *Agent, width int, selected bool, st Styles) stri
 	next := fit(r.Next, w[5])
 	if r.NextBlocked {
 		// The text stays plain; a tag right after it says it is blocked, red
-		// only for a P1 (red means a problem), dim otherwise.
+		// only for a P1 (red means a blocked P1), dim otherwise.
 		tag, style := " ■ blocked", st.Dim
 		if strings.HasPrefix(r.Next, "P1 ") {
 			style = st.Fail
@@ -220,12 +220,12 @@ func TableRow(ws *Workspace, a *Agent, width int, selected bool, st Styles) stri
 }
 
 // attentionMark is a coloured dot before the agent's name, the same colour
-// logic as agentTone: red for a problem, amber when something waits on
+// logic as agentTone: red for a blocked P1, amber when something waits on
 // the principal, green while it works. Nothing to act on means no mark, so
 // the eye goes to the rows that matter.
 func attentionMark(ws *Workspace, a *Agent, st Styles) string {
 	switch agentTone(ws, a) {
-	case toneProblem:
+	case toneBlocked:
 		return st.Fail.Render("●")
 	case toneForYou:
 		return st.Warn.Render("●")
@@ -238,7 +238,7 @@ func attentionMark(ws *Workspace, a *Agent, st Styles) string {
 
 // ColourLegend explains the attention dots in one line.
 func ColourLegend(st Styles) string {
-	return st.Fail.Render("●") + st.Dim.Render(" problem   ") +
+	return st.Fail.Render("●") + st.Dim.Render(" blocked by someone else   ") +
 		st.Warn.Render("●") + st.Dim.Render(" waiting on you   ") +
 		st.OK.Render("●") + st.Dim.Render(" working   ") +
 		st.Dim.Render("no dot: nothing to act on")

@@ -19,12 +19,12 @@ const (
 	toneIdle
 	toneWorking
 	toneForYou
-	toneProblem
+	toneBlocked
 )
 
 func (st Styles) tone(t tone) lipgloss.Style {
 	switch t {
-	case toneProblem:
+	case toneBlocked:
 		return st.Fail
 	case toneForYou:
 		return st.Warn
@@ -37,12 +37,14 @@ func (st Styles) tone(t tone) lipgloss.Style {
 	}
 }
 
-// agentTone picks the attention colour: a problem beats something waiting on
-// the principal, which beats the agent's run state.
+// agentTone picks the attention colour: a P1 blocked by someone else beats
+// something waiting on the principal, which beats the agent's run state.
+// Overdue items and health have their own counts and column, so red keeps
+// one meaning.
 func agentTone(ws *Workspace, a *Agent) tone {
 	switch {
-	case a.OverdueCount(ws.Scanned) > 0 || a.BlockedCount(ws.Principal) > 0 || a.Health.Level == Fail:
-		return toneProblem
+	case a.BlockedCount(ws.Principal) > 0:
+		return toneBlocked
 	case len(a.ForPrincipal(ws.Principal)) > 0 || a.InboxUnprocessed > 0:
 		return toneForYou
 	case a.Live != nil && a.Live.Running && a.Live.Status == "working":
