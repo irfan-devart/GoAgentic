@@ -254,7 +254,8 @@ agents/<name>/
 ├── MEMORY.md        Index of standing knowledge and session logs
 ├── memory/
 │   ├── standing/    Durable rules, decisions, baselines (all loaded on startup)
-│   └── sessions/    Per-session logs (most recent 2 loaded on startup)
+│   ├── sessions/    Per-session logs (most recent 2 loaded on startup)
+│   └── tasks/       Delegated task logs (agents with a lead; newest read in task sessions)
 └── playbooks/       Repeatable procedures with defined execution modes
 ```
 
@@ -324,7 +325,7 @@ Leave a session open for two days and the agent still thinks it is two days ago.
 | **Session** | You, with `/agents:start` | Full | Memory, tracker, commits |
 | **Tick** | The scheduler timer | Trimmed | `memory/scheduled/inbox.md` only |
 | **Peer** | Another agent, with `/agents:ask` | Trimmed plus the request file | The reply section of one file in `peer/` |
-| **Task** | The agent's lead, with `/agents:delegate` | Full plus the work order | Like a session (its own files, tracker, a `type: task` memory, commits), answering to the lead |
+| **Task** | The agent's lead, with `/agents:delegate` | Full plus the work order | Like a session (its own files, tracker, a task log in `memory/tasks/`, commits), answering to the lead |
 
 Ticks and peer sessions never commit, never send anything, and stay at autonomy L3. A human session drains the inbox and glances at `peer/` at its next start.
 

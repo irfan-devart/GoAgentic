@@ -4,7 +4,7 @@ Reference for `agents/CONVENTIONS.md` (the master). Loaded on demand, not at sta
 
 ## Session End Protocol
 
-A **task session** (`reference/task.md` § 5) runs Steps 1–7 at its hand-back with `type: task` and a `task: <work order path>` line in the session memory frontmatter, then writes the hand-back instead of Step 8. A **lead** also stages, in Step 7, the work orders it wrote or answered this session (they sit in its members' `peer/` folders).
+A **task session** (`reference/task.md` § 5) runs Steps 1–7 at its hand-back, writing its memory to `memory/tasks/` (not `memory/sessions/`) with `type: task` and a `task: <work order path>` line in the frontmatter, skipping Step 5, then writes the hand-back instead of Step 8. A **lead** also stages, in Step 7, the work orders it wrote or answered this session (they sit in its members' `peer/` folders).
 
 Triggered by `/agents:start <name> close`, `/agents:start <name> end`, `/agents:start <name> wrap up`, or when {{PRINCIPAL}} signals the session is ending.
 
@@ -23,7 +23,7 @@ Scan the full conversation and identify:
 
 ### Step 2: Update action tracker
 
-Update `actions.md`:
+Update `actions.md`. Rows should already be current, since the tracker is updated as items change (master § actions.md); this step catches what was missed:
 - Add new action items to Open, each Action cell starting with a bold label (master § actions.md: 3–8 words, under 60 characters, no dates or status words). Give any row you touch a label if it has none
 - Move completed items to Completed with date
 - Update statuses and flag items at risk or overdue. Each status starts with one of the four states (master § actions.md): `Not started`, `In progress`, `Waiting on <who>`, `Parked`; a short note may follow ` — `. Bring any row you touch onto them

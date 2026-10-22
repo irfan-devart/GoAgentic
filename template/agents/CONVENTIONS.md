@@ -81,6 +81,7 @@ agents/<agent-name>/
 ├── memory/
 │   ├── standing/        # Durable rules, decisions, baselines
 │   ├── sessions/        # Per-session logs
+│   ├── tasks/           # Task logs from delegated work (only agents with a lead)
 │   └── scheduled/       # Scheduler inbox (only agents with scheduled tasks)
 ├── reference/           # Situational rules and exact detail, read on demand (created when first needed)
 ├── peer/                # Agent-to-agent exchanges and work orders (created on demand by /agents:ask, /agents:delegate)
@@ -172,6 +173,8 @@ Status **starts with one of four states**, optionally followed by ` — ` and a 
 | `Parked` | Deliberately not being worked (deferred, on hold, dormant, watching) |
 
 Examples: `In progress — draft 2 of 3`, `Waiting on Dario — tech = 25 seats set`, `Parked — revisit after TE go`. Done items move to Completed, so there is no Done state. Keep the note short; the story belongs in the Action cell or the session log. `Waiting on` replaces "blocked", "gated" and "awaiting": what matters is who it waits on. Write {{PRINCIPAL}}'s first name, not "me", so the line reads the same from anywhere. Tools key on the state: `goagentic dash` lists items waiting on {{PRINCIPAL}} under "Waiting on", any other `Waiting on` as blocked, and greys `Parked`. A free-text status still displays, but the dashboard cannot tell who the item waits on, and `/agents:doctor` warns about it: move any free-text status onto the four states at the next wrap.
+
+**Update the tracker as items change, not only at wrap.** When an item finishes, changes state, or gets a new item, edit that row there and then. `goagentic dash` and `/agents:status` re-read trackers every few seconds, so a tracker written only at wrap shows {{PRINCIPAL}} stale items for the whole session. The wrap (`reference/session-end.md` § Step 2) then catches what was missed and rewrites `Next session:`. Edits go to the agent's own tracker only, and are committed at wrap as before.
 
 Session memories reference `actions.md` for action items rather than duplicating them. This prevents action items from being lost in old session logs.
 
@@ -322,11 +325,11 @@ Not every session is an interactive pairing with {{PRINCIPAL}}. Automated schedu
 | **Session** (interactive) | {{PRINCIPAL}} runs `/agents:start <name>` | Full startup sequence | Session memory, action tracker, commit |
 | **Tick** (automated) | A scheduler fires a due task | **Trimmed** — conventions, soul, name, role, autonomy, tools, actions, standing memory, the inbox, the specific task/playbook, `context.md` startup paths. **Not** the recent-2 session memories | The **inbox only** — never session memory, action tracker, or commit |
 | **Peer** (agent-to-agent) | Another agent in the same workspace runs `/agents:ask` | **Trimmed** like a tick, plus the request file. Runs in a fresh Herdr pane that closes when the reply is written | The **reply section of one file in `peer/`** only. Ceiling L3. See `reference/peer.md` |
-| **Task** (delegated) | The agent's **lead** (its `context.md` has `lead: <Lead>`) runs `/agents:delegate` for an outcome {{PRINCIPAL}} approved | Full startup steps 1–13, plus the work order; no priority declaration. Runs in a fresh Herdr pane until the lead accepts the work | Like a session: its own files, worktree, tracker row, a session memory with `type: task`, a commit of its own paths. Works under its own `autonomy.md` with the lead standing in for {{PRINCIPAL}} inside the outcome; {{PRINCIPAL}}'s own gates stay {{PRINCIPAL}}'s. See `reference/task.md` |
+| **Task** (delegated) | The agent's **lead** (its `context.md` has `lead: <Lead>`) runs `/agents:delegate` for an outcome {{PRINCIPAL}} approved | Full startup steps 1–13, plus the work order; no priority declaration. Runs in a fresh Herdr pane until the lead accepts the work | Like a session: its own files, worktree, tracker row, a task log in `memory/tasks/`, a commit of its own paths. Works under its own `autonomy.md` with the lead standing in for {{PRINCIPAL}} inside the outcome; {{PRINCIPAL}}'s own gates stay {{PRINCIPAL}}'s. See `reference/task.md` |
 
 **Why trimmed + inbox-only:** if ticks wrote session memories, a run of thin automated ticks between pairing sessions would flush the substantive interactive sessions out of the recent-2 startup window and rot the agent's context. So ticks stay out of `memory/sessions/` entirely. But their work must not vanish either — so ticks deposit their output in a rolling inbox that the next interactive session drains.
 
-**Why tasks get the full load and write a session memory:** a task is real work on the agent's own files, so it needs the same context and leaves the same trail as a session. Only who it answers to differs: the lead, not {{PRINCIPAL}} directly. Questions only {{PRINCIPAL}} may answer (the agent's L1, anything external or irreversible, gates that name {{PRINCIPAL}}) still go to {{PRINCIPAL}}, through the lead.
+**Why tasks get the full load and their own log folder:** a task is real work on the agent's own files, so it needs the same context and leaves the same trail as a session. But a busy lead hands out many tasks, and if their logs went into `memory/sessions/` they would flush {{PRINCIPAL}}'s own sessions out of the recent-2 window, just as ticks would. So task logs go to `memory/tasks/`: a session with {{PRINCIPAL}} reads the 2 most recent sessions, a task session reads those plus the newest task log. Only who it answers to differs: the lead, not {{PRINCIPAL}} directly. Questions only {{PRINCIPAL}} may answer (the agent's L1, anything external or irreversible, gates that name {{PRINCIPAL}}) still go to {{PRINCIPAL}}, through the lead.
 
 **The scheduled-run inbox** (`memory/scheduled/inbox.md`): a rolling, append-only ledger. Ticks append `UNPROCESSED` entries. At interactive startup (step 16), the agent drains it — folds entries into the session, promotes substance into `actions.md` or a memory entry, then flips them to `PROCESSED`. Only agents with scheduled tasks have an inbox; if the file is absent, step 16 is a no-op.
 
@@ -418,6 +421,10 @@ resume: claude --resume ${CLAUDE_SESSION_ID}
 (Claude Code form. On another harness use the row for it in `reference/session-end.md` § Step 4.)
 
 Contain: topics discussed, decisions made, open questions. Do NOT duplicate action items — reference `actions.md`.
+
+### memory/tasks/
+
+Present only for agents with a lead. Each delegated task writes its log here (`type: task`, `task: <work order path>`), never in `memory/sessions/`, so task work does not push {{PRINCIPAL}}'s sessions out of the startup window or count toward the 10-session limit. Task sessions read the newest one at startup. Keep the 10 most recent; the task wrap moves older ones to `memory/archive/tasks/`. Not listed in MEMORY.md: the work order and the lead's outcome file point to them. Task logs written into `memory/sessions/` before agents v1.20.0 move here with `git mv` (`/agents:doctor` flags them).
 
 ### memory/scheduled/
 

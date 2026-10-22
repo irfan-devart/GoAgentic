@@ -6,6 +6,7 @@ Reference for `agents/CONVENTIONS.md` (the master). Loaded on demand, not at sta
 
 Use these in the `type` frontmatter field:
 - `session` — session summary (default) → `memory/sessions/`
+- `task` — delegated task log → `memory/tasks/` (never `memory/sessions/`; see master § memory/tasks/)
 - `decision` — key decision with rationale and context → `memory/standing/`
 - `baseline` — project state snapshot → `memory/standing/`
 - `stakeholder-feedback` — stakeholder positions, alignment/divergence → `memory/standing/`

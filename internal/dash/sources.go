@@ -244,9 +244,9 @@ func (d dirtyPaths) has(rel string) bool {
 }
 
 // unwrapped reports a session that ended without a wrap: the tracker has
-// uncommitted changes made after the newest session log. A wrap writes the
-// log after the tracker and commits both, so this only happens when a
-// session was closed without one.
+// uncommitted changes made after the newest session or task log. A wrap
+// writes the log after the tracker and commits both, so this only happens
+// when a session was closed without one.
 func unwrapped(dir string, trackerDirty bool) bool {
 	if !trackerDirty {
 		return false
@@ -256,9 +256,12 @@ func unwrapped(dir string, trackerDirty bool) bool {
 		return false
 	}
 	var newest time.Time
-	for _, f := range listFiles(filepath.Join(dir, "memory", "sessions"), "*.md") {
-		if info, err := os.Stat(filepath.Join(dir, "memory", "sessions", f.Name)); err == nil && info.ModTime().After(newest) {
-			newest = info.ModTime()
+	for _, sub := range []string{"sessions", "tasks"} {
+		logs := filepath.Join(dir, "memory", sub)
+		for _, f := range listFiles(logs, "*.md") {
+			if info, err := os.Stat(filepath.Join(logs, f.Name)); err == nil && info.ModTime().After(newest) {
+				newest = info.ModTime()
+			}
 		}
 	}
 	return st.ModTime().After(newest)

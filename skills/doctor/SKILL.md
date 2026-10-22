@@ -57,6 +57,8 @@ Always name the **single biggest file** and its share. That is the fix.
 - ⚠️ `MEMORY.md` links (`[[name]]` or `memory/...` paths) that match no file in `memory/**` (grep the names, glob for them).
 - If `reference/` exists (agent-level, not the framework's): ⚠️ a file in it has no line under `## Reference` in `MEMORY.md` containing `Read when`; ⚠️ a `reference §N` / `<file> §N` pointer in `memory/standing/` whose file has no heading starting `## N.` (grep the pointers, then the headings). Reference files are not counted in startup cost and have no size limit.
 - ⚠️ newest file in `memory/sessions/` older than the tracker's `Last reviewed` date by more than 7 days (sessions ran without a memory entry).
+- ⚠️ files in `memory/sessions/` with `type: task` in their frontmatter: task logs belong in `memory/tasks/` (agents v1.20.0). Name the count and the fix: `git mv` them to `memory/tasks/`, keep the 10 newest there, archive the rest to `memory/archive/tasks/`, drop their MEMORY.md lines. Leave them out of the 10-session count above.
+- ⚠️ more than 10 files in `memory/tasks/` (the task wrap archives older ones).
 
 ### D. Files and wiring
 

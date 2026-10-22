@@ -667,6 +667,13 @@ func TestUnwrapped(t *testing.T) {
 		t.Error("a session log written after the tracker is a wrap, not unwrapped")
 	}
 
+	set("memory/sessions/2026-09-27-s.md", old)
+	write(t, filepath.Join(dir, "memory/tasks/2026-09-27-t.md"), "# t\n")
+	set("memory/tasks/2026-09-27-t.md", later.Add(time.Minute))
+	if unwrapped(dir, true) {
+		t.Error("a task log written after the tracker is a wrap, not unwrapped")
+	}
+
 	if !(dirtyPaths{"agents/Sigrid/actions.md"}).has(filepath.Join("agents/Sigrid", "actions.md")) {
 		t.Error("has must match the exact path")
 	}
