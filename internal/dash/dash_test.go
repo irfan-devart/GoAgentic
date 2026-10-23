@@ -143,14 +143,14 @@ func TestBlockedDetection(t *testing.T) {
 
 func TestDetailSections(t *testing.T) {
 	ws := &Workspace{Principal: "Norman Noble", Scanned: now}
-	a := &Agent{Name: "Mimir", NextSession: "#67 close-out", Open: []Item{
-		{ID: "67", Action: "Close-out", Owner: "Mimir", Priority: "P1", Status: "In progress"},
-		{ID: "53", Action: "Rescope", Owner: "Mimir", Priority: "P1", Status: "Unblocked (MV side)"},
-		{ID: "64", Action: "Re-cut", Owner: "Mimir/Norman", Priority: "P1", Status: "awaiting Norman"},
+	a := &Agent{Name: "Sigrid", NextSession: "#67 close-out", Open: []Item{
+		{ID: "67", Action: "Close-out", Owner: "Sigrid", Priority: "P1", Status: "In progress"},
+		{ID: "53", Action: "Rescope", Owner: "Sigrid", Priority: "P1", Status: "Unblocked (MV side)"},
+		{ID: "64", Action: "Re-cut", Owner: "Sigrid/Norman", Priority: "P1", Status: "awaiting Norman"},
 		{ID: "68", Action: "Airtable renewal", Owner: "Norman/Dario", Priority: "P1", Status: "waiting on Dario"},
-		{ID: "44", Action: "InfoSec KRs", Owner: "Mimir", Priority: "P2", Status: "Awaiting draft"},
-		{ID: "70", Action: "Vendor exit", Owner: "Mimir", Priority: "P3", Status: "Blocked — no supplier left"},
-		{ID: "71", Action: "Old idea", Owner: "Mimir", Priority: "P3", Status: "Parked"},
+		{ID: "44", Action: "InfoSec KRs", Owner: "Sigrid", Priority: "P2", Status: "Awaiting draft"},
+		{ID: "70", Action: "Vendor exit", Owner: "Sigrid", Priority: "P3", Status: "Blocked — no supplier left"},
+		{ID: "71", Action: "Old idea", Owner: "Sigrid", Priority: "P3", Status: "Parked"},
 	}}
 	out := ansi.Strip(strings.Join(Detail(ws, a, 120, 0, NewStyles(true)), "\n"))
 	heads := []string{"Next session", "Waiting on Norman", "Waiting on others ◆", "Blocked ■", "Open actions — P1 2 · P2 0 · P3 0", "Parked — 1", "Health"}
