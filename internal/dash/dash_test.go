@@ -193,6 +193,30 @@ func TestDetailSections(t *testing.T) {
 	}
 }
 
+func TestParkedFoldsInLiveView(t *testing.T) {
+	ws := &Workspace{Principal: "Norman Noble", Scanned: now, Agents: []*Agent{{Name: "Sigrid", Open: []Item{
+		{ID: "1", Action: "Ship", Owner: "Sigrid", Priority: "P2", Status: "In progress"},
+		{ID: "8", Action: "Someday", Owner: "Sigrid", Priority: "P3", Status: "Parked — after launch"},
+	}}}}
+	m := &model{ws: ws, st: NewStyles(true), width: 100, height: 40}
+	m.key("right")
+	if out := ansi.Strip(m.render()); !strings.Contains(out, "Parked — 1") || !strings.Contains(out, "p to show") || strings.Contains(out, "Someday") {
+		t.Fatalf("parked items should fold by default:\n%s", out)
+	}
+	m.key("p")
+	if out := ansi.Strip(m.render()); !strings.Contains(out, "#8   Someday  after launch") || strings.Contains(out, "p to show") {
+		t.Fatalf("p should list the parked items:\n%s", out)
+	}
+	m.key("p")
+	if out := ansi.Strip(m.render()); strings.Contains(out, "Someday") {
+		t.Fatalf("p again should fold them:\n%s", out)
+	}
+	// The printed snapshot always lists them.
+	if out := ansi.Strip(strings.Join(Detail(ws, ws.Agents[0], 120, 0, NewStyles(true)), "\n")); !strings.Contains(out, "Someday") {
+		t.Errorf("snapshot detail should list parked items:\n%s", out)
+	}
+}
+
 func TestBlockedState(t *testing.T) {
 	for status, blocked := range map[string]bool{
 		"Blocked":                        true,

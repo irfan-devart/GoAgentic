@@ -52,10 +52,12 @@ type model struct {
 	all    bool
 	cursor int
 	// full shows the selected agent's detail on its own screen.
-	full   bool
-	scroll int
-	width  int
-	height int
+	full bool
+	// showParked lists parked items in the full detail; folded by default.
+	showParked bool
+	scroll     int
+	width      int
+	height     int
 	// status is a one-line message shown in the footer, e.g. a launch result.
 	status string
 	// quitAfterLaunch closes the dashboard once an agent opens: set when it
@@ -182,6 +184,8 @@ func (m *model) key(k string) tea.Cmd {
 		m.full, m.scroll = false, 0
 	case "space", "tab":
 		m.full, m.scroll = !m.full, 0
+	case "p":
+		m.showParked = !m.showParked
 	case "r":
 		return m.rescan()
 	case "a":
@@ -329,7 +333,7 @@ func (m *model) render() string {
 	}
 	footer := m.st.Dim.Render("↑↓ select · enter open · c harness · → detail · r refresh · " + quit)
 	if m.full {
-		footer = m.st.Dim.Render("↑↓ scroll · enter open · c harness · esc back · q quit")
+		footer = m.st.Dim.Render("↑↓ scroll · enter open · c harness · p parked · esc back · q quit")
 	}
 	if m.menu != nil {
 		footer = m.st.Dim.Render("↑↓ choose · enter save · esc cancel")
@@ -349,7 +353,7 @@ func (m *model) render() string {
 	top = append(top, CountHeader(m.ws, w, m.st))
 
 	if a := m.selected(); m.full && a != nil {
-		body := Detail(m.ws, a, w, 0, m.st)
+		body := detail(m.ws, a, w, 0, m.showParked, m.st)
 		if m.menu != nil {
 			body = m.menuLines(a)
 		}

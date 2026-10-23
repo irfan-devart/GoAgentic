@@ -257,6 +257,12 @@ func ColourLegend(st Styles) string {
 // Detail renders the full picture for one agent as lines, listing at most
 // maxItems open actions (0 lists them all).
 func Detail(ws *Workspace, a *Agent, width, maxItems int, st Styles) []string {
+	return detail(ws, a, width, maxItems, true, st)
+}
+
+// detail is Detail with the parked items listed or folded to a hint: the
+// live view folds them until the principal presses p.
+func detail(ws *Workspace, a *Agent, width, maxItems int, showParked bool, st Styles) []string {
 	var out []string
 	add := func(s string) { out = append(out, ansi.Truncate(s, width, "…")) }
 	title := st.Title.Render(a.Name)
@@ -391,10 +397,12 @@ func Detail(ws *Workspace, a *Agent, width, maxItems int, st Styles) []string {
 	section(fmt.Sprintf("Open actions — P1 %d · P2 %d · P3 %d", c["P1"], c["P2"], c["P3"]), st.Head, open)
 
 	// A capped (preview) list shows only the parked count; the full view
-	// lists them.
+	// lists them, or a hint when they are folded.
 	var shelf []string
 	if maxItems > 0 && len(parked) > 0 {
 		shelf = append(shelf, st.Dim.Render(fmt.Sprintf("  %d parked", len(parked))))
+	} else if !showParked && len(parked) > 0 {
+		shelf = append(shelf, st.Dim.Render("  p to show"))
 	} else {
 		for _, it := range byPriority(parked) {
 			line := fmt.Sprintf("  %-2s #%-3s %s", it.Priority, strings.TrimPrefix(it.ID, "#"), it.Headline())
