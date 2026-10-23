@@ -199,6 +199,12 @@ func TestParkedFoldsInLiveView(t *testing.T) {
 		{ID: "8", Action: "Someday", Owner: "Sigrid", Priority: "P3", Status: "Parked — after launch"},
 	}}}}
 	m := &model{ws: ws, st: NewStyles(true), width: 100, height: 40}
+	m.key("p") // from the table: opens the detail at the parked list
+	if out := ansi.Strip(m.render()); !m.full || !strings.Contains(out, "#8   Someday  after launch") {
+		t.Fatalf("p from the table should open the detail with parked listed:\n%s", out)
+	}
+	m.key("left")
+	m.key("p")
 	m.key("right")
 	if out := ansi.Strip(m.render()); !strings.Contains(out, "Parked — 1") || !strings.Contains(out, "p to show") || strings.Contains(out, "Someday") {
 		t.Fatalf("parked items should fold by default:\n%s", out)

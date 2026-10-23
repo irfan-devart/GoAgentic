@@ -185,7 +185,17 @@ func (m *model) key(k string) tea.Cmd {
 	case "space", "tab":
 		m.full, m.scroll = !m.full, 0
 	case "p":
+		// From the table or the detail: lists the parked items and scrolls
+		// to them, or folds them again.
 		m.showParked = !m.showParked
+		m.full, m.scroll = true, 0
+		if a := m.selected(); a != nil && m.showParked {
+			for i, l := range detail(m.ws, a, max(m.width, 20), 0, true, m.st) {
+				if strings.HasPrefix(ansi.Strip(l), "Parked — ") {
+					m.scroll = max(0, i-1)
+				}
+			}
+		}
 	case "r":
 		return m.rescan()
 	case "a":
@@ -331,7 +341,7 @@ func (m *model) render() string {
 	if m.inFleet {
 		quit = "esc fleet"
 	}
-	footer := m.st.Dim.Render("↑↓ select · enter open · c harness · → detail · r refresh · " + quit)
+	footer := m.st.Dim.Render("↑↓ select · enter open · c harness · → detail · p parked · r refresh · " + quit)
 	if m.full {
 		footer = m.st.Dim.Render("↑↓ scroll · enter open · c harness · p parked · esc back · q quit")
 	}
