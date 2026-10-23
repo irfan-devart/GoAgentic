@@ -19,6 +19,7 @@ const (
 	toneIdle
 	toneWorking
 	toneForYou
+	toneWaiting
 	toneBlocked
 )
 
@@ -26,6 +27,8 @@ func (st Styles) tone(t tone) lipgloss.Style {
 	switch t {
 	case toneBlocked:
 		return st.Fail
+	case toneWaiting:
+		return st.Wait
 	case toneForYou:
 		return st.Warn
 	case toneWorking:
@@ -37,14 +40,16 @@ func (st Styles) tone(t tone) lipgloss.Style {
 	}
 }
 
-// agentTone picks the attention colour: a P1 blocked by someone else beats
-// something waiting on the principal, which beats the agent's run state.
-// Overdue items and health have their own counts and column, so red keeps
-// one meaning.
+// agentTone picks the attention colour: a blocked item (red) beats a P1
+// waiting on someone else (orange), which beats something waiting on the
+// principal (amber), which beats the agent's run state. Overdue items and
+// health have their own counts and column, so red keeps one meaning.
 func agentTone(ws *Workspace, a *Agent) tone {
 	switch {
-	case a.BlockedCount(ws.Principal) > 0:
+	case a.BlockedCount() > 0:
 		return toneBlocked
+	case a.WaitingCount(ws.Principal) > 0:
+		return toneWaiting
 	case len(a.ForPrincipal(ws.Principal)) > 0 || a.InboxUnprocessed > 0:
 		return toneForYou
 	case a.Live != nil && a.Live.Running && a.Live.Status == "working":
@@ -58,7 +63,7 @@ func agentTone(ws *Workspace, a *Agent) tone {
 
 // Counts are the totals the count header shows.
 type Counts struct {
-	Agents, Live, ForYou, Overdue, Blocked, Health int
+	Agents, Live, ForYou, Overdue, Waiting, Blocked, Health int
 }
 
 // Counts totals the workspace for the count header and the fleet view.
@@ -70,7 +75,8 @@ func (ws *Workspace) Counts() Counts {
 		}
 		c.ForYou += len(a.ForPrincipal(ws.Principal)) + a.InboxUnprocessed
 		c.Overdue += a.OverdueCount(ws.Scanned)
-		c.Blocked += a.BlockedCount(ws.Principal)
+		c.Waiting += a.WaitingCount(ws.Principal)
+		c.Blocked += a.BlockedCount()
 		if a.Health.Level > OK {
 			c.Health++
 		}
@@ -99,7 +105,8 @@ func countLine(title string, c Counts, live bool, at time.Time, width int, st St
 	parts = append(parts,
 		count(c.ForYou, st.Warn, "✋", "for you"),
 		count(c.Overdue, st.Fail, "⚑", "overdue"),
-		count(c.Blocked, st.Fail, "■", "P1 blocked"),
+		count(c.Waiting, st.Wait, "◆", "P1 waiting on others"),
+		count(c.Blocked, st.Fail, "■", "blocked"),
 		count(c.Health, lipgloss.NewStyle(), "⚠", "health"),
 	)
 	left := strings.Join(parts, "   ")

@@ -13,7 +13,7 @@ import (
 
 // Styles colors the dashboard. The zero value (NoColor) prints plain text.
 type Styles struct {
-	Title, Dim, Head, OK, Plan, Warn, Fail, Accent lipgloss.Style
+	Title, Dim, Head, OK, Plan, Warn, Wait, Fail, Accent lipgloss.Style
 }
 
 // NewStyles returns the dashboard palette, or plain styles when noColor.
@@ -29,6 +29,7 @@ func NewStyles(noColor bool) Styles {
 		OK:     c("#65d1a7"),
 		Plan:   c("#65d1a7").Bold(true),
 		Warn:   c("#e5c07b"),
+		Wait:   c("#f0883e"),
 		Fail:   c("#ff5f5f").Bold(true),
 		Accent: c("#61afef"),
 	}
@@ -106,7 +107,7 @@ func WaitingCompact(ws *Workspace) string {
 type Row struct {
 	Agent, Harness, Live, Started, Health, Next string
 	Level                                       Level
-	NextBlocked                                 bool
+	NextWaiting, NextBlocked                    bool
 }
 
 // MakeRow flattens an agent into table cells.
@@ -133,7 +134,8 @@ func MakeRow(ws *Workspace, a *Agent) Row {
 	default:
 		if it, ok := a.NextUp(ws.Principal); ok {
 			r.Next = strings.TrimSpace(fmt.Sprintf("%s #%s %s", it.Priority, strings.TrimPrefix(it.ID, "#"), it.Headline()))
-			r.NextBlocked = it.BlockedOnOthers(ws.Principal)
+			r.NextWaiting = it.WaitsOnOthers(ws.Principal)
+			r.NextBlocked = it.Blocked()
 		} else if len(a.Open) == 0 {
 			r.Next = "(no open actions)"
 		} else {
@@ -191,12 +193,16 @@ func TableRow(ws *Workspace, a *Agent, width int, selected bool, st Styles) stri
 		live = st.Dim.Render(live)
 	}
 	next := fit(r.Next, w[5])
-	if r.NextBlocked {
-		// The text stays plain; a tag right after it says it is blocked, red
-		// only for a P1 (red means a blocked P1), dim otherwise.
-		tag, style := " ■ blocked", st.Dim
+	if r.NextWaiting || r.NextBlocked {
+		// The text stays plain; a tag right after it says why it cannot move:
+		// red for blocked, orange for a P1 waiting on someone else (the
+		// colours of the dot), dim for a lower priority waiting.
+		tag, style := " ◆ waiting", st.Dim
 		if strings.HasPrefix(r.Next, "P1 ") {
-			style = st.Fail
+			style = st.Wait
+		}
+		if r.NextBlocked {
+			tag, style = " ■ blocked", st.Fail
 		}
 		text := ansi.Truncate(r.Next, max(w[5]-len([]rune(tag)), 10), "…")
 		next = text + style.Render(tag)
@@ -220,13 +226,16 @@ func TableRow(ws *Workspace, a *Agent, width int, selected bool, st Styles) stri
 }
 
 // attentionMark is a coloured dot before the agent's name, the same colour
-// logic as agentTone: red for a blocked P1, amber when something waits on
-// the principal, green while it works. Nothing to act on means no mark, so
-// the eye goes to the rows that matter.
+// logic as agentTone: red for a blocked item, orange for a P1 waiting on
+// someone else, amber when something waits on the principal, green while it
+// works. Nothing to act on means no mark, so the eye goes to the rows that
+// matter.
 func attentionMark(ws *Workspace, a *Agent, st Styles) string {
 	switch agentTone(ws, a) {
 	case toneBlocked:
 		return st.Fail.Render("●")
+	case toneWaiting:
+		return st.Wait.Render("●")
 	case toneForYou:
 		return st.Warn.Render("●")
 	case toneWorking:
@@ -238,7 +247,8 @@ func attentionMark(ws *Workspace, a *Agent, st Styles) string {
 
 // ColourLegend explains the attention dots in one line.
 func ColourLegend(st Styles) string {
-	return st.Fail.Render("●") + st.Dim.Render(" blocked by someone else   ") +
+	return st.Fail.Render("●") + st.Dim.Render(" blocked   ") +
+		st.Wait.Render("●") + st.Dim.Render(" P1 waiting on others   ") +
 		st.Warn.Render("●") + st.Dim.Render(" waiting on you   ") +
 		st.OK.Render("●") + st.Dim.Render(" working   ") +
 		st.Dim.Render("no dot: nothing to act on")
@@ -276,102 +286,133 @@ func Detail(ws *Workspace, a *Agent, width, maxItems int, st Styles) []string {
 		add(st.Dim.Render(strings.Join(facts, " · ")))
 	}
 
-	if a.NextSession != "" {
+	// Six sections, always in this order and always shown, so every agent's
+	// panel reads the same way; an empty one says "None". The short preview
+	// (maxItems > 0) folds the empty ones into a single line instead.
+	var empty []string
+	section := func(title string, style lipgloss.Style, lines []string) {
+		if len(lines) == 0 && maxItems > 0 {
+			empty = append(empty, title)
+			return
+		}
 		add("")
-		add(st.Plan.Render("Next session (agent's own plan)"))
-		for _, step := range a.PlanSteps() {
-			add(fmt.Sprintf("  %-2s %s", step.Priority, step.Text))
+		add(style.Render(title))
+		if len(lines) == 0 {
+			add(st.Dim.Render("  None"))
+		}
+		for _, l := range lines {
+			add(l)
 		}
 	}
 
-	if mine := a.ForPrincipal(ws.Principal); len(mine) > 0 || a.InboxUnprocessed > 0 {
-		add("")
-		add(st.Warn.Render("Waiting on " + firstName(ws.Principal)))
-		for _, it := range mine {
-			add(fmt.Sprintf("  %-2s #%-3s %s", it.Priority, strings.TrimPrefix(it.ID, "#"), it.Headline()))
+	var plan []string
+	for _, step := range a.PlanSteps() {
+		plan = append(plan, fmt.Sprintf("  %-2s %s", step.Priority, step.Text))
+	}
+	section("Next session (agent's own plan)", st.Plan, plan)
+
+	// Each item shows in one section only: waiting on the principal, waiting
+	// on someone else, blocked, parked, or else open.
+	shownElsewhere := map[string]bool{}
+	var mine []string
+	for _, it := range a.ForPrincipal(ws.Principal) {
+		shownElsewhere[it.ID] = true
+		mine = append(mine, fmt.Sprintf("  %-2s #%-3s %s", it.Priority, strings.TrimPrefix(it.ID, "#"), it.Headline()))
+	}
+	if a.InboxUnprocessed > 0 {
+		mine = append(mine, fmt.Sprintf("  %d scheduled run(s) not yet read — start the agent to drain its inbox", a.InboxUnprocessed))
+	}
+	section("Waiting on "+firstName(ws.Principal), st.Warn, mine)
+
+	byPriority := func(items []Item) []Item {
+		var out []Item
+		for _, p := range []string{"P1", "P2", "P3", ""} {
+			for _, it := range items {
+				if it.Priority == p || (p == "" && priorityRank(it.Priority) > 3) {
+					out = append(out, it)
+				}
+			}
 		}
-		if a.InboxUnprocessed > 0 {
-			add(fmt.Sprintf("  %d scheduled run(s) not yet read — start the agent to drain its inbox", a.InboxUnprocessed))
-		}
+		return out
+	}
+	priorityLine := func(it Item) string {
+		return fmt.Sprintf("  %-2s ", it.Priority) + strings.TrimPrefix(itemLine(it, st), "  ")
 	}
 
-	blocked := a.BlockedP1s(ws.Principal)
-	if len(blocked) > 0 {
-		add("")
-		add(st.Fail.Render("Blocked items"))
-		for _, it := range blocked {
-			add(itemLine(it, st))
+	var others []string
+	for _, it := range byPriority(a.WaitingOnOthers(ws.Principal)) {
+		if shownElsewhere[it.ID] {
+			continue
 		}
+		shownElsewhere[it.ID] = true
+		others = append(others, priorityLine(it))
 	}
+	section("Waiting on others ◆", st.Wait, others)
+
+	var blocked []string
+	for _, it := range byPriority(a.BlockedItems()) {
+		shownElsewhere[it.ID] = true
+		blocked = append(blocked, priorityLine(it))
+	}
+	section("Blocked ■", st.Fail, blocked)
 
 	var live, parked []Item
 	for _, it := range a.Open {
-		if it.Parked() {
+		switch {
+		case it.Parked():
 			parked = append(parked, it)
-		} else {
+		case !shownElsewhere[it.ID]:
 			live = append(live, it)
 		}
 	}
 
-	if len(live) > 0 {
-		add("")
-		c := map[string]int{}
+	// Open: everything else, items under way before not started within each
+	// priority. The heading counts what this section holds.
+	c := map[string]int{}
+	for _, it := range live {
+		c[it.Priority]++
+	}
+	var ordered []Item
+	for _, notYet := range []bool{false, true} {
 		for _, it := range live {
-			c[it.Priority]++
-		}
-		add(st.Head.Render(fmt.Sprintf("Open actions — P1 %d · P2 %d · P3 %d", c["P1"], c["P2"], c["P3"])))
-		// Blocked P1s are listed above and parked items below, so both are
-		// left out here; the counts in the heading still include blocked
-		// P1s. Within each priority, items under way come before not started.
-		shown, listed := 0, len(blocked)
-		var ordered []Item
-		for _, p := range []string{"P1", "P2", "P3", ""} {
-			for _, notYet := range []bool{false, true} {
-				for _, it := range live {
-					if it.Priority == p && it.NotStarted() == notYet {
-						ordered = append(ordered, it)
-					}
-				}
+			if it.NotStarted() == notYet {
+				ordered = append(ordered, it)
 			}
-		}
-		for _, it := range ordered {
-			if maxItems > 0 && shown >= maxItems {
-				break
-			}
-			if it.Priority == "P1" && it.BlockedOnOthers(ws.Principal) {
-				continue
-			}
-			shown++
-			line := fmt.Sprintf("  %-2s ", it.Priority) + strings.TrimPrefix(itemLine(it, st), "  ")
-			if it.BlockedOnOthers(ws.Principal) {
-				line += st.Dim.Render("  ■ blocked")
-			}
-			add(line)
-		}
-		if more := len(live) - listed - shown; more > 0 {
-			add(st.Dim.Render(fmt.Sprintf("  … %d more", more)))
 		}
 	}
-
-	if len(parked) > 0 {
-		add("")
-		add(st.Head.Render(fmt.Sprintf("Parked — %d", len(parked))))
-		// A capped (preview) list shows only the count; the full view lists them.
-		for _, p := range []string{"P1", "P2", "P3", ""} {
-			if maxItems > 0 {
-				break
-			}
-			for _, it := range parked {
-				if it.Priority != p {
-					continue
-				}
-				line := fmt.Sprintf("  %-2s #%-3s %s", it.Priority, strings.TrimPrefix(it.ID, "#"), it.Headline())
-				if note := parkedNote(it.Status); note != "" {
-					line += "  " + note
-				}
-				add(st.Dim.Render(line))
-			}
+	var open []string
+	for _, it := range byPriority(ordered) {
+		if maxItems > 0 && len(open) >= maxItems {
+			open = append(open, st.Dim.Render(fmt.Sprintf("  … %d more", len(live)-maxItems)))
+			break
 		}
+		open = append(open, priorityLine(it))
+	}
+	section(fmt.Sprintf("Open actions — P1 %d · P2 %d · P3 %d", c["P1"], c["P2"], c["P3"]), st.Head, open)
+
+	// A capped (preview) list shows only the parked count; the full view
+	// lists them.
+	var shelf []string
+	if maxItems > 0 && len(parked) > 0 {
+		shelf = append(shelf, st.Dim.Render(fmt.Sprintf("  %d parked", len(parked))))
+	} else {
+		for _, it := range byPriority(parked) {
+			line := fmt.Sprintf("  %-2s #%-3s %s", it.Priority, strings.TrimPrefix(it.ID, "#"), it.Headline())
+			if note := parkedNote(it.Status); note != "" {
+				line += "  " + note
+			}
+			shelf = append(shelf, st.Dim.Render(line))
+		}
+	}
+	section(fmt.Sprintf("Parked — %d", len(parked)), st.Dim, shelf)
+
+	if len(empty) > 0 {
+		names := make([]string, len(empty))
+		for i, e := range empty {
+			names[i] = strings.TrimRight(strings.Split(e, " — ")[0], " ◆■")
+		}
+		add("")
+		add(st.Dim.Render("None: " + strings.Join(names, " · ")))
 	}
 
 	if s, ok := a.LastSession(); ok {

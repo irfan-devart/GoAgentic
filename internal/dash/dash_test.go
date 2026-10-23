@@ -118,7 +118,7 @@ func TestBlockedDetection(t *testing.T) {
 		"In progress — delegated to Pax":    false,
 		"Open":                              false,
 	} {
-		if got := (Item{Status: status}).Blocked(); got != want {
+		if got := (Item{Status: status}).Waiting(); got != want {
 			t.Errorf("Blocked(%q) = %v, want %v", status, got, want)
 		}
 	}
@@ -133,45 +133,93 @@ func TestBlockedDetection(t *testing.T) {
 	if (Item{Status: "Blocked — Heinrich on holiday (Norman 09-27)"}).WaitsOn("Norman Noble") {
 		t.Error("a name that only says who reported the block is not a wait on the principal")
 	}
-	if (Item{Status: "awaiting Norman"}).BlockedOnOthers("Norman Noble") {
+	if (Item{Status: "awaiting Norman"}).WaitsOnOthers("Norman Noble") {
 		t.Error("an item waiting on the principal is not blocked on others")
 	}
-	if !(Item{Status: "waiting on Dario"}).BlockedOnOthers("Norman Noble") {
+	if !(Item{Status: "waiting on Dario"}).WaitsOnOthers("Norman Noble") {
 		t.Error("waiting on Dario is blocked on others")
 	}
 }
 
-func TestDetailBlockedSection(t *testing.T) {
+func TestDetailSections(t *testing.T) {
 	ws := &Workspace{Principal: "Norman Noble", Scanned: now}
-	a := &Agent{Name: "Mimir", Open: []Item{
+	a := &Agent{Name: "Mimir", NextSession: "#67 close-out", Open: []Item{
 		{ID: "67", Action: "Close-out", Owner: "Mimir", Priority: "P1", Status: "In progress"},
 		{ID: "53", Action: "Rescope", Owner: "Mimir", Priority: "P1", Status: "Unblocked (MV side)"},
 		{ID: "64", Action: "Re-cut", Owner: "Mimir/Norman", Priority: "P1", Status: "awaiting Norman"},
 		{ID: "68", Action: "Airtable renewal", Owner: "Norman/Dario", Priority: "P1", Status: "waiting on Dario"},
 		{ID: "44", Action: "InfoSec KRs", Owner: "Mimir", Priority: "P2", Status: "Awaiting draft"},
+		{ID: "70", Action: "Vendor exit", Owner: "Mimir", Priority: "P3", Status: "Blocked — no supplier left"},
+		{ID: "71", Action: "Old idea", Owner: "Mimir", Priority: "P3", Status: "Parked"},
 	}}
 	out := ansi.Strip(strings.Join(Detail(ws, a, 120, 0, NewStyles(true)), "\n"))
-	blockedAt := strings.Index(out, "Blocked items")
-	openAt := strings.Index(out, "Open actions")
-	waitAt := strings.Index(out, "Waiting on Norman")
-	if blockedAt < 0 || openAt < blockedAt || waitAt > blockedAt {
-		t.Fatalf("want Waiting, then Blocked items, then Open actions:\n%s", out)
+	heads := []string{"Next session", "Waiting on Norman", "Waiting on others ◆", "Blocked ■", "Open actions — P1 2 · P2 0 · P3 0", "Parked — 1", "Health"}
+	at := make([]int, len(heads))
+	for i, h := range heads {
+		at[i] = strings.Index(out, h)
+		if at[i] < 0 || (i > 0 && at[i] < at[i-1]) {
+			t.Fatalf("want sections in order %q:\n%s", heads, out)
+		}
 	}
-	blocked, open := out[blockedAt:openAt], out[openAt:]
-	if !strings.Contains(blocked, "#68") || strings.Contains(blocked, "#53") || strings.Contains(blocked, "#64") || strings.Contains(blocked, "#44") {
-		t.Errorf("blocked section wrong:\n%s", blocked)
+	body := func(i int) string { return out[at[i]:at[i+1]] }
+	for i, want := range [][]string{{"#67"}, {"#64"}, {"#68", "#44"}, {"#70"}, {"#67", "#53"}, {"#71"}} {
+		for _, id := range want {
+			if !strings.Contains(body(i), id) {
+				t.Errorf("%s should list %s:\n%s", heads[i], id, body(i))
+			}
+		}
 	}
-	if strings.Contains(open, "#68") || !strings.Contains(open, "#53") || !strings.Contains(open, "#44") {
-		t.Errorf("open list should drop only the blocked P1:\n%s", open)
+	for i, not := range [][]string{nil, {"#68"}, {"#64", "#70"}, {"#68"}, {"#64", "#68", "#44", "#70", "#71"}} {
+		for _, id := range not {
+			if strings.Contains(body(i), id) {
+				t.Errorf("%s should not list %s:\n%s", heads[i], id, body(i))
+			}
+		}
 	}
-	if !strings.Contains(out[waitAt:blockedAt], "#64") {
-		t.Errorf("#64 should wait on Norman:\n%s", out)
+	if a.WaitingCount("Norman Noble") != 1 || a.BlockedCount() != 1 {
+		t.Errorf("waiting %d, blocked %d; want 1 and 1", a.WaitingCount("Norman Noble"), a.BlockedCount())
 	}
-	if !strings.Contains(open, "P1 4 · P2 1") {
-		t.Errorf("counts should include blocked items:\n%s", open)
+
+	// Empty sections say None in the full view and fold into one line in
+	// the preview.
+	quiet := &Agent{Name: "Varro", Open: []Item{{ID: "1", Action: "Ship", Owner: "Varro", Priority: "P2", Status: "In progress"}}}
+	full := ansi.Strip(strings.Join(Detail(ws, quiet, 120, 0, NewStyles(true)), "\n"))
+	if strings.Count(full, "  None") != 5 {
+		t.Errorf("want five empty sections saying None:\n%s", full)
 	}
-	if a.BlockedCount("Norman Noble") != 1 {
-		t.Errorf("blocked count = %d, want 1", a.BlockedCount("Norman Noble"))
+	preview := ansi.Strip(strings.Join(Detail(ws, quiet, 120, 12, NewStyles(true)), "\n"))
+	if strings.Contains(preview, "  None") || !strings.Contains(preview, "None: Next session (agent's own plan) · Waiting on Norman · Waiting on others · Blocked · Parked") {
+		t.Errorf("preview should fold empty sections into one line:\n%s", preview)
+	}
+}
+
+func TestBlockedState(t *testing.T) {
+	for status, blocked := range map[string]bool{
+		"Blocked":                        true,
+		"Blocked — no supplier left":     true,
+		"blocked: licence withdrawn":     true,
+		"Blocked (since 10-20)":          true,
+		"Blocked on #5":                  false, // older free text: names what it waits on
+		"Blocked on Norman":              false,
+		"Waiting on Dario":               false,
+		"In progress — blocked by a bug": false,
+	} {
+		it := Item{Status: status}
+		if it.Blocked() != blocked {
+			t.Errorf("Blocked(%q) = %v, want %v", status, it.Blocked(), blocked)
+		}
+		if blocked && (it.Waiting() || it.Parked() || it.NotStarted() || it.WaitsOn("Norman Noble")) {
+			t.Errorf("%q is blocked, nothing else", status)
+		}
+	}
+	ws := &Workspace{Principal: "Norman Noble", Scanned: now}
+	tr := parseActions("## Open\n\n| # | Action | Owner | Priority | Due/Target | Status |\n|---|---|---|---|---|---|\n" +
+		"| 1 | Quote | A | P1 | | Waiting on Ivan — reply |\n| 2 | Exit | A | P3 | | Blocked — no way out |\n")
+	if got := agentTone(ws, &Agent{Open: tr.open}); got != toneBlocked {
+		t.Errorf("a blocked item beats a P1 waiting: tone = %v, want red", got)
+	}
+	if c := (&Workspace{Principal: "Norman Noble", Agents: []*Agent{{Open: tr.open}}}).Counts(); c.Waiting != 1 || c.Blocked != 1 {
+		t.Errorf("counts = %+v", c)
 	}
 }
 
@@ -271,10 +319,10 @@ func TestStandardStates(t *testing.T) {
 		if !ok || state != c.state || who != c.who {
 			t.Errorf("State(%q) = %q, %q, %v; want %q, %q", c.status, state, who, ok, c.state, c.who)
 		}
-		if it.Blocked() != c.blocked || it.WaitsOn(norman) != c.waitsOn || it.BlockedOnOthers(norman) != c.others ||
+		if it.Waiting() != c.blocked || it.WaitsOn(norman) != c.waitsOn || it.WaitsOnOthers(norman) != c.others ||
 			it.Parked() != c.parked || it.NotStarted() != c.notYet {
 			t.Errorf("%q: blocked %v waitsOn %v others %v parked %v notStarted %v", c.status,
-				it.Blocked(), it.WaitsOn(norman), it.BlockedOnOthers(norman), it.Parked(), it.NotStarted())
+				it.Waiting(), it.WaitsOn(norman), it.WaitsOnOthers(norman), it.Parked(), it.NotStarted())
 		}
 	}
 	if _, _, ok := (Item{Status: "Deferred to Q4"}).State(); ok {
@@ -295,7 +343,7 @@ func TestNextUpAndPrincipal(t *testing.T) {
 	if got := strings.Join(mine, ","); got != "5,6" {
 		t.Errorf("for principal = %s, want the solely owned row and the one blocked on Norman", got)
 	}
-	if !a.Open[1].Blocked() || a.Open[0].Blocked() {
+	if !a.Open[1].Waiting() || a.Open[0].Waiting() {
 		t.Error("blocked detection wrong")
 	}
 	if !a.Open[4].Parked() {
@@ -408,7 +456,7 @@ func TestSnapshotAndJSON(t *testing.T) {
 		"New session", // last session, in the detail now
 		"AGENT   HARNESS   LIVE",
 		"harness claude (default)",
-		"Open actions — P1 1 · P2 3 · P3 0",
+		"Open actions — P1 1 · P2 1 · P3 0", // #5 and #6 wait on Norman, so not here
 		"Parked — 1",
 		"P3 #8   Someday",
 	} {
@@ -1028,17 +1076,17 @@ func TestHarnessMenuSavesWithoutOpening(t *testing.T) {
 	}
 }
 
-func TestRedMeansBlockedOnly(t *testing.T) {
+func TestOrangeMeansP1WaitingOnOthers(t *testing.T) {
 	tr := parseActions("## Open\n\n| # | Action | Owner | Priority | Due/Target | Status |\n|---|---|---|---|---|---|\n" +
 		"| 1 | Late | A | P1 | 2026-09-01 | In progress |\n")
 	ws := &Workspace{Principal: "Norman Noble", Scanned: now}
 	overdue := &Agent{Open: tr.open, Health: Health{Level: Fail}}
-	if got := agentTone(ws, overdue); got == toneBlocked {
-		t.Error("an overdue item or a health failure alone must not turn the dot red")
+	if got := agentTone(ws, overdue); got >= toneWaiting {
+		t.Error("an overdue item or a health failure alone must not colour the dot")
 	}
 	tr = parseActions("## Open\n\n| # | Action | Owner | Priority | Due/Target | Status |\n|---|---|---|---|---|---|\n" +
 		"| 1 | Quote | A | P1 | | Waiting on Ivan — reply |\n")
-	if got := agentTone(ws, &Agent{Open: tr.open}); got != toneBlocked {
-		t.Errorf("a P1 waiting on someone else: tone = %v, want red", got)
+	if got := agentTone(ws, &Agent{Open: tr.open}); got != toneWaiting {
+		t.Errorf("a P1 waiting on someone else: tone = %v, want orange", got)
 	}
 }

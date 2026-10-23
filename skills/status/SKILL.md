@@ -38,7 +38,8 @@ Glob for both `agents/*/context.md` (single-domain) and `agents/*/*/context.md` 
    - Add a leading **Scope** column **only if** more than one distinct scope exists across the agents (otherwise omit it).
 4. Below the table, add a short cross-org rollup as **bullets** (these are lists, not a grid):
    - **In flight:** active, unblocked missions across the org.
-   - **Blocked / gated:** items whose status starts `Waiting on` someone other than the principal (older trackers: blocked / gated / awaiting), each with what it waits on. Items `Waiting on` the principal go under a separate **Waiting on <first name>** line.
+   - **Blocked:** items whose status starts `Blocked` (genuinely stuck, nobody named can move them), each with what is missing.
+   - **Waiting on others:** items whose status starts `Waiting on` someone other than the principal (older trackers: blocked on / gated / awaiting), each with what it waits on. Items `Waiting on` the principal go under a separate **Waiting on <first name>** line.
    - **Stale (>14 days):** agents whose `Last reviewed` is more than 14 days before today.
 5. If a scope filter was given (e.g., `/agents:status Acme`), restrict to that scope.
 

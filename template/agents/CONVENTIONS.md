@@ -163,16 +163,17 @@ Priority uses P1/P2/P3:
 - **P2** — Should progress when P1s are clear. Tracked actively.
 - **P3** — Tracked, not urgent. Revisit periodically.
 
-Status **starts with one of four states**, optionally followed by ` — ` and a short note:
+Status **starts with one of five states**, optionally followed by ` — ` and a short note:
 
 | State | Meaning |
 |-------|---------|
 | `Not started` | Live; nobody has begun it |
 | `In progress` | Being worked |
 | `Waiting on <who>` | Cannot move until someone acts. Name them: `Waiting on <{{PRINCIPAL}}'s first name>`, `Waiting on Dario`, `Waiting on #51` |
+| `Blocked` | Genuinely stuck: no named person or item can move it, and the way forward is unclear. The note says what is missing: `Blocked — no supplier left for the part` |
 | `Parked` | Deliberately not being worked (deferred, on hold, dormant, watching) |
 
-Examples: `In progress — draft 2 of 3`, `Waiting on Dario — tech = 25 seats set`, `Parked — revisit after TE go`. Done items move to Completed, so there is no Done state. Keep the note short; the story belongs in the Action cell or the session log. `Waiting on` replaces "blocked", "gated" and "awaiting": what matters is who it waits on. Write {{PRINCIPAL}}'s first name, not "me", so the line reads the same from anywhere. Tools key on the state: `goagentic dash` lists items waiting on {{PRINCIPAL}} under "Waiting on", any other `Waiting on` as blocked, and greys `Parked`. A free-text status still displays, but the dashboard cannot tell who the item waits on, and `/agents:doctor` warns about it: move any free-text status onto the four states at the next wrap.
+Examples: `In progress — draft 2 of 3`, `Waiting on Dario — tech = 25 seats set`, `Blocked — licence withdrawn, no alternative yet`, `Parked — revisit after TE go`. Done items move to Completed, so there is no Done state. Keep the note short; the story belongs in the Action cell or the session log. `Waiting on` replaces "gated" and "awaiting": what matters is who it waits on. **Use `Blocked` sparingly.** If anyone can act (a person, another item, a date), the item is `Waiting on` them, even when the wait is long; `Blocked` is for when nobody can, and it shows red on the dashboard. The older free text `Blocked on Dario` still reads as waiting on Dario. Write {{PRINCIPAL}}'s first name, not "me", so the line reads the same from anywhere. Tools key on the state: `goagentic dash` lists items waiting on {{PRINCIPAL}} under "Waiting on <first name>" (amber), any other `Waiting on` under "Waiting on others" (orange), `Blocked` under "Blocked" (red), and greys `Parked`. A free-text status still displays, but the dashboard cannot tell who the item waits on, and `/agents:doctor` warns about it: move any free-text status onto the five states at the next wrap.
 
 **Update the tracker as items change, not only at wrap.** When an item finishes, changes state, or gets a new item, edit that row there and then. `goagentic dash` and `/agents:status` re-read trackers every few seconds, so a tracker written only at wrap shows {{PRINCIPAL}} stale items for the whole session. The wrap (`reference/session-end.md` § Step 2) then catches what was missed and rewrites `Next session:`. Edits go to the agent's own tracker only, and are committed at wrap as before.
 
@@ -181,7 +182,7 @@ Session memories reference `actions.md` for action items rather than duplicating
 #### Tracker Hygiene
 
 1. **No ghosts in Open.** When an item completes, move it to Completed and delete the row from Open. No strikethrough-then-leave-it pattern. The Open section must be a reliable list of live work.
-2. **Fortnightly full pass.** Every other week (or equivalent cadence session), audit the full tracker: refresh stale due dates, cross-check shared items against other agents' trackers, verify statuses against external state, move any status that does not start with one of the four states onto them, and check P1 count stays under ~8.
+2. **Fortnightly full pass.** Every other week (or equivalent cadence session), audit the full tracker: refresh stale due dates, cross-check shared items against other agents' trackers, verify statuses against external state, move any status that does not start with one of the five states onto them, and check P1 count stays under ~8.
 3. **Priority sections.** Structure the Open table with P1 / P2 / P3 sub-sections. Flat lists don't scale past ~30 items.
 4. **Archive completed items monthly.** The Completed table keeps only the last 30 days. Older items move to `actions-archive.md` in the same directory — same table format, out of the startup read path. Create the archive file when the agent is created; first archival happens when items age past 30 days.
 

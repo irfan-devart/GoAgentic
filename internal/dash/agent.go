@@ -340,17 +340,21 @@ func shorten(s string) string {
 	return s
 }
 
-// The four standard states a status starts with (master conventions
+// The five standard states a status starts with (master conventions
 // § actions.md). Older free-text statuses fall back to keyword matching.
 const (
 	StateNotStarted = "Not started"
 	StateInProgress = "In progress"
 	StateWaiting    = "Waiting on"
+	StateBlocked    = "Blocked"
 	StateParked     = "Parked"
 )
 
+// stateRe takes "Blocked" only on its own or before a note ("Blocked —
+// no supplier"); the older free text "Blocked on Dario" names who can act,
+// so it stays a wait.
 var (
-	stateRe = regexp.MustCompile(`(?i)^(not started|in progress|waiting on|parked)\b`)
+	stateRe = regexp.MustCompile(`(?i)^(not started|in progress|waiting on|parked|blocked(?:\s*$|\s*[—–:(-]))`)
 	whoRe   = regexp.MustCompile(`^(.*?)(\s+[—–-]\s+|[;(,]|$)`)
 )
 
@@ -362,8 +366,9 @@ func (i Item) State() (state, who string, ok bool) {
 	if m == nil {
 		return "", "", false
 	}
-	for _, st := range []string{StateNotStarted, StateInProgress, StateWaiting, StateParked} {
-		if strings.EqualFold(m[1], st) {
+	word := strings.TrimRight(m[1], " \t—–:(-")
+	for _, st := range []string{StateNotStarted, StateInProgress, StateWaiting, StateBlocked, StateParked} {
+		if strings.EqualFold(word, st) {
 			state = st
 		}
 	}
@@ -377,12 +382,20 @@ func (i Item) State() (state, who string, ok bool) {
 // blockedRe matches whole words only, so "Unblocked" is not a block.
 var blockedRe = regexp.MustCompile(`\b(block\w*|gated|await\w*|waiting|on hold)\b`)
 
-// Blocked reports whether the status says the item is waiting on something.
-func (i Item) Blocked() bool {
+// Waiting reports whether the status says the item is waiting on something.
+// Older free text ("Blocked on legal", "awaiting draft") counts as a wait.
+func (i Item) Waiting() bool {
 	if state, _, ok := i.State(); ok {
 		return state == StateWaiting
 	}
 	return blockedRe.MatchString(strings.ToLower(i.Status))
+}
+
+// Blocked reports whether the item is stuck with nobody named who can move
+// it: the "Blocked" state. Free text never counts, so red keeps one meaning.
+func (i Item) Blocked() bool {
+	state, _, _ := i.State()
+	return state == StateBlocked
 }
 
 // WaitsOn reports whether the item is waiting on the principal ("Waiting
@@ -409,10 +422,10 @@ func (i Item) WaitsOn(principal string) bool {
 	return false
 }
 
-// BlockedOnOthers reports whether the item is live and waiting on someone
+// WaitsOnOthers reports whether the item is live and waiting on someone
 // other than the principal.
-func (i Item) BlockedOnOthers(principal string) bool {
-	return i.Blocked() && !i.Parked() && !i.WaitsOn(principal)
+func (i Item) WaitsOnOthers(principal string) bool {
+	return i.Waiting() && !i.Parked() && !i.WaitsOn(principal)
 }
 
 // notStartedRe matches a free-text status that says work has not begun:
@@ -523,7 +536,7 @@ func (a *Agent) NextUp(principal string) (Item, bool) {
 func (a *Agent) ForPrincipal(principal string) []Item {
 	var out []Item
 	for _, it := range a.Open {
-		if (it.OnlyOwnedBy(principal) || it.WaitsOn(principal)) && !it.Parked() {
+		if (it.OnlyOwnedBy(principal) || it.WaitsOn(principal)) && !it.Parked() && !it.Blocked() {
 			out = append(out, it)
 		}
 	}
@@ -681,22 +694,45 @@ func listFiles(dir, pattern string) []FileInfo {
 	return out
 }
 
-// BlockedP1s lists P1 items waiting on someone other than the principal.
-// Lower priorities are often "awaiting" something as a matter of course;
-// flagging them would make every agent look urgent. Items waiting on the
-// principal show under "Waiting on" instead.
-func (a *Agent) BlockedP1s(principal string) []Item {
+// WaitingOnOthers lists live items, any priority, waiting on someone other
+// than the principal. Items waiting on the principal show under "Waiting
+// on <principal>" instead.
+func (a *Agent) WaitingOnOthers(principal string) []Item {
 	var out []Item
 	for _, it := range a.Open {
-		if it.Priority == "P1" && it.BlockedOnOthers(principal) {
+		if it.WaitsOnOthers(principal) {
 			out = append(out, it)
 		}
 	}
 	return out
 }
 
-// BlockedCount counts the items BlockedP1s returns.
-func (a *Agent) BlockedCount(principal string) int { return len(a.BlockedP1s(principal)) }
+// WaitingCount counts P1 items waiting on someone else, the ones that colour
+// the dot. Lower priorities are often waiting as a matter of course;
+// counting them would make every agent look urgent.
+func (a *Agent) WaitingCount(principal string) int {
+	n := 0
+	for _, it := range a.WaitingOnOthers(principal) {
+		if it.Priority == "P1" {
+			n++
+		}
+	}
+	return n
+}
+
+// BlockedItems lists items in the Blocked state, any priority.
+func (a *Agent) BlockedItems() []Item {
+	var out []Item
+	for _, it := range a.Open {
+		if it.Blocked() {
+			out = append(out, it)
+		}
+	}
+	return out
+}
+
+// BlockedCount counts the items BlockedItems returns.
+func (a *Agent) BlockedCount() int { return len(a.BlockedItems()) }
 
 // OverdueCount counts live items past their due date.
 func (a *Agent) OverdueCount(now time.Time) int {

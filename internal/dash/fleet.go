@@ -98,6 +98,7 @@ func (f *Fleet) Counts() Counts {
 		c.Live += w.Live
 		c.ForYou += w.ForYou
 		c.Overdue += w.Overdue
+		c.Waiting += w.Waiting
 		c.Blocked += w.Blocked
 		c.Health += w.Health
 	}
@@ -142,12 +143,12 @@ func workspaceTone(ws *Workspace) tone {
 	return t
 }
 
-var fleetCols = [7]int{14, 6, 5, 8, 8, 8, 7} // workspace, agents, live, for you, overdue, blocked, health
+var fleetCols = [8]int{14, 6, 5, 8, 8, 8, 8, 7} // workspace, agents, live, for you, overdue, waiting, blocked, health
 
 // FleetTableHeader and FleetRow render the fleet table; the last column,
 // who needs you, takes the rest of the width.
 func FleetTableHeader(width int, st Styles) string {
-	cells := []string{"WORKSPACE", "AGENTS", "LIVE", "FOR YOU", "OVERDUE", "BLOCKED", "HEALTH"}
+	cells := []string{"WORKSPACE", "AGENTS", "LIVE", "FOR YOU", "OVERDUE", "WAITING", "BLOCKED", "HEALTH"}
 	for i := range cells {
 		cells[i] = fit(cells[i], fleetCols[i])
 	}
@@ -180,8 +181,9 @@ func FleetRow(ws *Workspace, width int, selected bool, st Styles) string {
 		liveCell,
 		num(c.ForYou, fleetCols[3], func(s string) string { return st.Warn.Render(s) }),
 		num(c.Overdue, fleetCols[4], func(s string) string { return st.Fail.Render(s) }),
-		num(c.Blocked, fleetCols[5], func(s string) string { return st.Fail.Render(s) }),
-		num(c.Health, fleetCols[6], plain),
+		num(c.Waiting, fleetCols[5], func(s string) string { return st.Wait.Render(s) }),
+		num(c.Blocked, fleetCols[6], func(s string) string { return st.Fail.Render(s) }),
+		num(c.Health, fleetCols[7], plain),
 	}
 	used := 4
 	for _, w := range fleetCols {
@@ -196,6 +198,8 @@ func FleetRow(ws *Workspace, width int, selected bool, st Styles) string {
 	switch workspaceTone(ws) {
 	case toneBlocked:
 		mark = st.Fail.Render("●")
+	case toneWaiting:
+		mark = st.Wait.Render("●")
 	case toneForYou:
 		mark = st.Warn.Render("●")
 	case toneWorking:
