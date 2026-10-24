@@ -151,7 +151,7 @@ All checks run before anything is written: a refused delegation leaves no file a
 
 ### Watching
 
-In T3 Code, read every Herdr command in this section through the map in `reference/t3.md`: the background `--wait` on `thread start` or `thread send` stands in for `herdr agent wait`, `thread show` for `herdr agent read`, and there is no pane to close.
+In T3 Code, read every Herdr command in this section through the map in `reference/t3.md`: the background `--wait` on `thread start` or `thread send` stands in for `herdr agent wait`, `thread show` for `herdr agent read`, and settling the thread (`t3_thread_organize`, `action: settle`) for `herdr pane close`.
 
 After the start prompt, wait for the pane to reach `working` (`herdr agent wait <target>-task --until working --timeout 60000`): a fresh pane starts idle. Then run `herdr agent wait <target>-task --until idle --until done --until blocked` in the background (Claude Code: Bash with `run_in_background`), so you are woken when the task pane stops. Then read the work order:
 
