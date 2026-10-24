@@ -27,7 +27,7 @@ Glob for both `agents/*/context.md` (single-domain) and `agents/*/*/context.md` 
    | Agent | Role | Current focus | Updated |
    |-------|------|---------------|---------|
 
-   **Live column (Herdr or T3).** Run `echo "$HERDR_ENV"` (you cannot see env vars otherwise). If it prints `1`, run `herdr agent list`, keep only entries whose `cwd` is under the current working directory and whose `name` matches an agent here (lowercase), and add a `Live` column with pane id and state (`w1:p3 idle`), `—` if none. Never show agents from other roots. In T3 Code (`HERDR_ENV` empty, `T3CODE_CLI_PATH` set; run `echo "T3=$T3CODE_CLI_PATH"`), take the column from `"$T3CODE_CLI_PATH" thread list --json` instead: threads with `status: running` whose `title` starts `<Name> - `, shown as the title (`Scotty - Task`).
+   **Live column (Herdr or T3).** Run `echo "$HERDR_ENV"` (you cannot see env vars otherwise). If it prints `1`, run `herdr agent list`, keep only entries whose `cwd` is under the current working directory and whose `name` matches an agent here (lowercase), and add a `Live` column with pane id and state (`w1:p3 idle`), `—` if none. Never show agents from other roots. In T3 Code (`HERDR_ENV` empty, `T3CODE_CLI_PATH` set; run `echo "T3=$T3CODE_CLI_PATH"`), take the column from `"$T3CODE_CLI_PATH" thread list --json` instead: `<Name> - …` threads that are live (t3.md: a `<Name> - Peer` or `<Name> - Task` thread with `status: running`, or any other `<Name> - …` thread, a human session, with `settled: false`), shown as the title (`Sigrid - Task`).
 
    **Table formatting rules (so it always renders correctly):**
    - Keep every cell on a **single line** — summarise; never paste a multi-line action into a cell.
