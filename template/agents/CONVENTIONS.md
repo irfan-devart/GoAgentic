@@ -17,6 +17,7 @@ This master is shared. A workspace's `agents/CONVENTIONS.md` carries frontmatter
 | `harness` | `claude` | The coding-agent CLI that runs unattended ticks and peer panes, and that `goagentic dash` opens agents in: `claude`, `codex`, `gemini`, `opencode`, `pi`, or `cursor`. An agent's `context.md` may set its own `harness:` for peer panes and the dashboard (see § context.md). Interactive sessions work from any harness that has the framework commands installed (see § Invocation). |
 | `model` | *(the CLI's default)* | The model ticks and peer panes run on, passed to the harness as `--model <value>` in that CLI's own syntax (`claude-sonnet-5-5`, `gpt-5`, `openrouter/qwen/qwen3-coder`). An agent's `context.md` may set its own `model:` for peer panes. OpenRouter is a model provider, not a harness: reach it through `opencode` or `pi`. |
 | `task-limit` | `3` | How many delegated tasks one lead may have in flight at once (§ Session Types, `reference/task.md`). |
+| `sweep-cadence` | `weekly` | How often each agent runs a full tracker sweep (`weekly` or `fortnightly`). An agent whose `Last swept:` date is older than this proposes `sweep` in its Session Priority Declaration (§ Tracker Hygiene). |
 | `task-timebox` | `4h` | How long one delegated task may run before the lead stops it and brings it to {{PRINCIPAL}}; only {{PRINCIPAL}} extends it (`reference/task.md`). |
 
 **Optional `## Agent creation` section.** Steps a workspace adds to every agent `/agents:new` creates: files beyond the standard set, a required field, an external setup step. `/agents:new` runs them in Phase 6 after its own steps, and Phase 7 checks they were done. Write each step as an outcome and name where it lands, for example:
@@ -40,7 +41,7 @@ Long procedures live beside this file in `reference/`. In plugin mode that is `$
 | `tooling.md` | Creating an agent, adding a tool, or unsure of a tool action's level |
 | `playbooks.md` | Writing or editing a playbook |
 | `autonomy-format.md` | Creating an agent or restructuring `autonomy.md` |
-| `tracker-cleanup.md` | Asked to clean up the action tracker |
+| `tracker-cleanup.md` | The tracker sweep: `sweep`, a due weekly sweep, or asked to clean up the action tracker |
 | `index-maintenance.md` | Updating an INDEX.md at session end |
 | `peer.md` | Asking another agent for something (`/agents:ask`), running as a peer session, or anything Herdr |
 | `task.md` | Setting up a lead, delegating work (`/agents:delegate`), or running as a task session |
@@ -149,6 +150,7 @@ Autonomy levels for tooling actions are defined in `autonomy.md`, not here. `too
 Single standing file — the agent's running to-do list. Always current, updated every session close. Structure:
 - `Last reviewed: YYYY-MM-DD` at the top — **the date only, one line**. Session narrative never goes here; it goes in `memory/sessions/`. `/agents:doctor` flags this line when it exceeds 600 characters.
 - `Next session: …` on the line below it — **one line**: the focus the agent proposes for its next session, as item numbers and a few words (`Next session: #14 Career sweep → #11 close worktrees`). Rewritten at every session close (`reference/session-end.md` § Step 2). It lets {{PRINCIPAL}} see what each agent wants to do next from `goagentic dash` or `/agents:status` without starting the agent. Optional: trackers without it still work, and readers fall back to the top open P1.
+- `Last swept: YYYY-MM-DD` below that — **the date only**: when the agent last ran a full tracker sweep (§ Tracker Hygiene rule 2). Written by the sweep itself, not at every close. Optional: a tracker without it has never been swept, so the agent proposes its first sweep.
 - Open table: #, Action, Ticket, Owner, Priority, Due/Target, Status, Since
 - Completed table: #, Action, Ticket, Owner, Completed date
 
@@ -191,13 +193,13 @@ Session memories reference `actions.md` for action items rather than duplicating
 #### Tracker Hygiene
 
 1. **No ghosts in Open.** When an item completes, move it to Completed and delete the row from Open. No strikethrough-then-leave-it pattern. The Open section must be a reliable list of live work.
-2. **Fortnightly full pass.** Every other week (or equivalent cadence session), audit the full tracker: refresh stale due dates, cross-check shared items against other agents' trackers, verify statuses against external state, move any status that does not start with one of the five states onto them, and check P1 count stays under ~8.
+2. **Weekly sweep.** Once per `sweep-cadence` (default weekly), run a full pass over the tracker: `reference/tracker-cleanup.md`, which reads every Open row against what is true now, applies the agent's own fixes, and brings {{PRINCIPAL}} one table of changes and one batch of questions. It ends by setting `Last swept:` to today. {{PRINCIPAL}} can also ask for one at any time with `sweep` (§ Shorthand).
 3. **Priority sections.** Structure the Open table with P1 / P2 / P3 sub-sections. Flat lists don't scale past ~30 items.
 4. **Archive completed items monthly.** The Completed table keeps only the last 30 days. Older items move to `actions-archive.md` in the same directory — same table format, out of the startup read path. Create the archive file when the agent is created; first archival happens when items age past 30 days.
 
 #### Tracker Cleanup Procedure
 
-When {{PRINCIPAL}} asks you to review or clean up your tracker, read `reference/tracker-cleanup.md` (beside this file) and follow it.
+When {{PRINCIPAL}} types `sweep` or asks you to review or clean up your tracker, and when your sweep is due (rule 2), read `reference/tracker-cleanup.md` (beside this file) and follow it.
 
 ### context.md
 
@@ -358,7 +360,7 @@ When the session runs inside [Herdr](https://herdr.dev) (`HERDR_ENV=1`), the rou
 Agents have a natural tendency toward recency bias — prioritising whatever was discussed most recently over items that may actually be more important. These mechanics counteract that.
 
 At the start of every session (after loading context), the agent:
-1. Reviews `actions.md` and identifies the top priorities (P1 items first, then P2)
+1. Reviews `actions.md` and identifies the top priorities (P1 items first, then P2). If the `Last swept:` date is older than the workspace's `sweep-cadence` (default weekly), or the line is missing, include a tracker **sweep** in the proposed focus (§ Tracker Hygiene rule 2)
 2. Checks for inbound communications on the workspace's `inbound` channel (frontmatter; see `tools.md` for the triage command). If messages exist, factor them into the priority assessment — a message from a stakeholder may elevate or introduce a priority. If no inbound channel is configured or the inbox is empty, move on silently.
 3. Reconciles in-flight {{PRINCIPAL}}-owned items. If `actions.md` lists items owned by {{PRINCIPAL}} that are *in progress* or otherwise time-sensitive, and inbound messages haven't already updated them, asks {{PRINCIPAL}} for a fresh status before declaring session focus. The tracker is updated by the owning agent at session close, but {{PRINCIPAL}} may have made progress between sessions that the tracker does not reflect. Reconciling first prevents stale-state-driven session focus.
 4. Includes any playbooks flagged by the trigger check (startup step 15) — cadenced playbooks that are due this session
@@ -372,6 +374,7 @@ This declaration becomes the session's compass. Everything that follows is measu
 {{PRINCIPAL}} can type these in any session, with any agent:
 
 - **`#N?`** (e.g. `#23?`): what does tracker item N need from {{PRINCIPAL}}? Answer with the specific decisions or actions, each with a recommendation. If it needs nothing from {{PRINCIPAL}}, say who or what it is waiting on, and fix the item's status if it wrongly says `Waiting on <{{PRINCIPAL}}'s first name>`.
+- **`sweep`**: run the full tracker sweep now (`reference/tracker-cleanup.md`): every Open row checked against what is true now, the agent's own fixes applied, then one table of changes and one numbered batch of questions, each with a recommendation. Sets `Last swept:` when done.
 - **`mine?`**: list every open item in this agent's tracker that is waiting on {{PRINCIPAL}}, one line each with the one thing it needs, quickest first. Check each against its cell as you go: an item that is really waiting on someone or something else gets its status fixed and is left off the list.
 
 A wrong `Waiting on` sends {{PRINCIPAL}} chasing items nobody needs them for, and the dashboard lists it under the wrong person, so correct it on the spot (an edit to your own tracker).

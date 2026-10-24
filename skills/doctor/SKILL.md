@@ -41,6 +41,7 @@ Always name the **single biggest file** and its share. That is the fix.
 - ❌ file > 40 KB; ⚠️ > 20 KB.
 - ❌ the `Last reviewed:` line is longer than 600 characters, or contains "Prior review" more than once. Session narrative has been stuffed into the header; it belongs in `memory/sessions/` (one file per session) with the header cut to one line.
 - ⚠️ no `Last reviewed:` line; ⚠️ its date is > 14 days old; ❌ > 45 days old.
+- ℹ️ no `Last swept:` line (never swept), or its date is older than twice the workspace's `sweep-cadence` (default weekly, so 14 days): suggest `/agents:start <name> sweep`.
 - ⚠️ Open section has no `### P1` / `### P2` / `### P3` sub-sections.
 - ⚠️ more than 8 open P1 rows (count table rows under `### P1` before the next heading).
 - ⚠️ Open contains struck-through rows: the Action cell starts with `~~` (a done item left in Open). Strikethrough inside a live item's text (`~~algorithm HTML~~ (received) + SQL source`) is fine.
