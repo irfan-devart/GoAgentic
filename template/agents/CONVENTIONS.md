@@ -160,7 +160,7 @@ Single standing file — the agent's running to-do list. Always current, updated
 2. The **plan or work document** the item is about
 3. Otherwise a **per-item note**, `items/<#>-<slug>.md` in the agent's folder: a heading, then dated lines, newest last. Create it the second time a cell would gain a dated update. It is never read at startup and has no size limit; read it when the item is worked on
 
-Exact facts the agent must get right (IDs, recipes, gates) are not history: they go to `reference/` or `tools.md` (§ Agent reference). **Completed rows are one line**: the label, the result, and the release or commit, plus the pointer if there is one. Item notes stay when the row completes or is archived. No forced migration: long cells move out when next touched or at a tracker cleanup.
+Exact facts the agent must get right (IDs, recipes, gates) are not history: they go to `reference/` or `tools.md` (§ Agent reference). **Completed rows are one line**: the label, the result, and the release or commit, plus the pointer if there is one. Cutting a cell never deletes history: anything not already in a note, doc or session log moves to the item note (or, for a completed row, to `actions-archive.md`) before the cell is cut. Item notes stay when the row completes or is archived. No forced migration: long cells move out when next touched or at a tracker cleanup.
 
 The `Ticket` column is optional — contains the issue tracker ID when the action has a corresponding ticket. Its header is the workspace's `ticket-column` frontmatter value (default `Ticket`). When present:
 - At session close, sync status both ways (update tracker state to match action status, and vice versa)

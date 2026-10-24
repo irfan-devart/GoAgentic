@@ -25,7 +25,7 @@ Scan the full conversation and identify:
 
 Update `actions.md`. Rows should already be current, since the tracker is updated as items change (master § actions.md); this step catches what was missed:
 - Add new action items to Open, each Action cell starting with a bold label (master § actions.md: 3–8 words, under 60 characters, no dates or status words). Give any row you touch a label if it has none
-- Move completed items to Completed with date, cut to one line (label, result, release or commit)
+- Move completed items to Completed with date, cut to one line (label, result, release or commit); detail found nowhere else moves to the item note first
 - Any cell you touched that grew past about 300 characters: move its history to where it belongs (master § actions.md: outcome file or work order, plan doc, else `items/<#>-<slug>.md`) and leave one pointer
 - Update statuses and flag items at risk or overdue. Each status starts with one of the five states (master § actions.md): `Not started`, `In progress`, `Waiting on <who>`, `Blocked`, `Parked`; a short note may follow ` — `. Bring any row you touch onto them
 - Rewrite the `Next session:` line under `Last reviewed:` with the focus you would propose next time, up to three items (`Next session: #14 Career sweep → #11 close worktrees`). One line; add it if the tracker has none. {{PRINCIPAL}} reads it from the dashboard without starting you, so make it what you would actually declare.
