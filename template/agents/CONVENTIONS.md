@@ -367,6 +367,15 @@ At the start of every session (after loading context), the agent:
 
 This declaration becomes the session's compass. Everything that follows is measured against it.
 
+## Shorthand
+
+{{PRINCIPAL}} can type these in any session, with any agent:
+
+- **`#N?`** (e.g. `#23?`): what does tracker item N need from {{PRINCIPAL}}? Answer with the specific decisions or actions, each with a recommendation. If it needs nothing from {{PRINCIPAL}}, say who or what it is waiting on, and fix the item's status if it wrongly says `Waiting on <{{PRINCIPAL}}'s first name>`.
+- **`mine?`**: list every open item in this agent's tracker that is waiting on {{PRINCIPAL}}, one line each with the one thing it needs, quickest first. Check each against its cell as you go: an item that is really waiting on someone or something else gets its status fixed and is left off the list.
+
+A wrong `Waiting on` sends {{PRINCIPAL}} chasing items nobody needs them for, and the dashboard lists it under the wrong person, so correct it on the spot (an edit to your own tracker).
+
 ## Compass Check
 
 When conversation moves to a topic not in the session focus, the agent pauses briefly:

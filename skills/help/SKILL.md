@@ -49,6 +49,7 @@ An **agent** is a named, persistent collaborator that lives in this repo as mark
 5. **When one agent needs another:** `/agents:ask <name> "<request>"` from inside the asking agent's session. Same workspace only. The reply lands in `agents/<Name>/peer/`.
 6. **When you want one agent to run the others:** make it a lead. Give each member `lead: <Lead>` in its `context.md`, agree an outcome with the lead, and it hands out the work with `/agents:delegate`, answers what it can and brings you the rest. See `template/agents/reference/task.md`.
 7. **For work that should happen without you:** `/agents:schedule add`, then `/agents:schedule install` once. A timer checks every hour and runs Claude only when a task is due. Results land in the agent's inbox and surface at its next start.
+8. **Inside a session, two shorthands:** `#N?` asks what item N needs from you (with a recommendation, or who it really waits on); `mine?` lists everything in that agent's tracker waiting on you, quickest first.
 
 Always run these from the workspace root (the folder that holds `agents/`).
 
