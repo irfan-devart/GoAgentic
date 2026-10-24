@@ -84,6 +84,7 @@ agents/<agent-name>/
 │   ├── tasks/           # Task logs from delegated work (only agents with a lead)
 │   └── scheduled/       # Scheduler inbox (only agents with scheduled tasks)
 ├── reference/           # Situational rules and exact detail, read on demand (created when first needed)
+├── items/               # Per-item history notes the tracker points to, never read at startup (created when first needed)
 ├── peer/                # Agent-to-agent exchanges and work orders (created on demand by /agents:ask, /agents:delegate)
 ├── outcomes/            # Leads only: one file per outcome the principal approved (reference/task.md § 2)
 └── playbooks/           # Repeatable procedures with defined execution modes
@@ -152,6 +153,14 @@ Single standing file — the agent's running to-do list. Always current, updated
 - Completed table: #, Action, Ticket, Owner, Completed date
 
 **The Action cell starts with a bold label**: what the item is, in 3–8 words and under 60 characters, then whatever detail it needs: `**Acme contract — MSA + first SOW** — v0.5 review copies with Dario …`. The label names the work, not its state, so it carries no dates or status words (`**Wave 2 partner follow-ups**`, not `**Waiting on replies for wave 2 (09-28)**`). A short item still gets one (`**Review the training proposal** — before it goes to the client`). The label is the item's headline wherever it is shown in short: `goagentic dash`, `/agents:status`, `/agents:next`; without one, tools guess a headline from the cell. Rows without a label still work; add one when you next touch the row (`reference/session-end.md` § Step 2).
+
+**The cell says what is true now, not how it got there.** After the label: the current state, the next step, and **one pointer** to where the item's history lives (`History → items/31-deploy-pipeline.md`). Aim for about 300 characters. `actions.md` is read at every startup, so a cell that gains a dated line at every step becomes a diary every session pays for. History goes to the **first of these that exists**:
+
+1. The lead's **outcome file** or the **work order**, for delegated work (it is already written there)
+2. The **plan or work document** the item is about
+3. Otherwise a **per-item note**, `items/<#>-<slug>.md` in the agent's folder: a heading, then dated lines, newest last. Create it the second time a cell would gain a dated update. It is never read at startup and has no size limit; read it when the item is worked on
+
+Exact facts the agent must get right (IDs, recipes, gates) are not history: they go to `reference/` or `tools.md` (§ Agent reference). **Completed rows are one line**: the label, the result, and the release or commit, plus the pointer if there is one. Item notes stay when the row completes or is archived. No forced migration: long cells move out when next touched or at a tracker cleanup.
 
 The `Ticket` column is optional — contains the issue tracker ID when the action has a corresponding ticket. Its header is the workspace's `ticket-column` frontmatter value (default `Ticket`). When present:
 - At session close, sync status both ways (update tracker state to match action status, and vice versa)

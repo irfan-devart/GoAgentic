@@ -135,6 +135,7 @@ Once name, role, soul, and autonomy are confirmed, create the full agent structu
    │   └── sessions/
    ├── peer/            # created on demand by /agents:ask; may be omitted here
    ├── reference/       # created when first needed (master § Agent reference); omit here
+   ├── items/           # created when first needed (master § actions.md); omit here
    └── playbooks/
    ```
 

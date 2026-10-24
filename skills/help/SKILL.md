@@ -65,6 +65,7 @@ agents/<Name>/
   MEMORY.md      index of its memory
   memory/        standing/ (durable) and sessions/ (one per session)
   reference/     optional: situational rules and detail, read on demand
+  items/         optional: history notes the tracker points to, read on demand
   peer/          replies to /agents:ask requests
   playbooks/     repeatable procedures with triggers
 ```
