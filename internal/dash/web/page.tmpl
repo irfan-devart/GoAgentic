@@ -292,11 +292,11 @@ main.addEventListener("keydown", e => {
   <div class="who-block">
     <div class="name-row"><h1 class="agent-name">{{.Name}}</h1>
     <span class="status-pill {{.StateClass}}">{{if or (eq .State "working") (eq .State "starting") (eq .State "wrapping up")}}<span class="spin" aria-hidden="true">⠋</span>{{else}}<span class="sdot"></span>{{end}}{{with .Activity}}{{template "activity" .}}{{else}}{{.State}}{{end}}</span></div>
-    <p class="agent-title">{{.Title}}{{with .Head.When}}{{if $.Agent.Title}}<span class="sep"></span>{{end}}<span class="when">{{.}}</span>{{end}}</p>
+    {{with .Title}}<p class="agent-title">{{.}}</p>{{end}}
+    <p class="agent-meta">{{with .Head}}<span class="runs" title="{{.ModelHint}}">{{.Mark}}{{.Model}}</span>{{with .When}}<span class="when">{{.}}</span>{{end}}{{end}}</p>
   </div>
   <div class="head-side">
-    {{with .Head}}<span class="chip" title="{{.ModelHint}}">{{.Mark}}{{.Model}}</span>
-    {{with .Ctx}}<span class="chip ctx {{.Tone}}" title="{{.Hint}}"><span class="bar"><span style="width: {{.Pct}}%"></span><i style="left: {{.Budget}}%"></i></span>{{.Text}}</span>{{end}}{{end}}
+    {{with .Head}}{{with .Ctx}}<span class="chip ctx {{.Tone}}" title="{{.Hint}}"><span class="bar"><span style="width: {{.Pct}}%"></span><i style="left: {{.Budget}}%"></i></span>{{.Text}}</span>{{end}}{{end}}
     {{if and .CloseURL (not .WrapStopped) (not .Wrapping)}}<form class="answer close" method="post" action="{{.CloseURL}}">
       <span class="status{{if .CloseError}} error{{end}}">{{.CloseError}}</span> <button type="submit" class="{{if and .Head.Ctx .Head.Ctx.Over}}nudge{{else}}quiet{{end}}"{{if .Busy}} disabled title="{{.Name}} is busy — wrap when it has finished"{{else}} title="Runs its wrap, then closes the pane"{{end}}>Wrap &amp; close</button>
     </form>{{end}}
