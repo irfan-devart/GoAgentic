@@ -1,5 +1,5 @@
 {{define "page"}}<!doctype html>
-<html lang="en">
+<html lang="en" data-style="{{styleVersion}}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -41,6 +41,9 @@ async function refresh(force) {
   const st = chatState(), typing = document.activeElement?.closest("form.send");
   // The sidebar and the panes keep where you had scrolled to.
   const scrolled = [...main.querySelectorAll("[data-scroll]")].map(el => [el.dataset.scroll, el.scrollTop]);
+  // A new build brings a new stylesheet, which a swap would not load.
+  const v = /data-style="([^"]*)"/.exec(html);
+  if (v && v[1] !== document.documentElement.dataset.style) { location.reload(); return; }
   main.innerHTML = html;
   for (const [key, top] of scrolled) { const el = main.querySelector(`[data-scroll="${key}"]`); if (el) el.scrollTop = top; }
   if (typing) main.querySelector("form.send textarea")?.focus();
@@ -190,7 +193,7 @@ main.addEventListener("keydown", e => {
 </html>{{end}}
 
 {{define "main"}}
-<div class="app{{if .Agent}} agent-view{{end}}">
+<div class="app{{if .Agent}} agent-view{{end}}" data-style="{{styleVersion}}">
 <header class="topbar">
   <button class="menu" type="button" aria-label="Show the sidebar" onclick="document.body.classList.toggle('nav-open')">☰</button>
   <span class="brand">{{with .Nav}}{{.Current}}{{end}}</span>
