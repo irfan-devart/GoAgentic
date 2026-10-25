@@ -2,6 +2,7 @@ package dash
 
 import (
 	"hash/fnv"
+	"html/template"
 	"time"
 )
 
@@ -10,6 +11,8 @@ import (
 
 type webFact struct {
 	Label, Value, Hint string
+	// Mark is a small logo before the value: the harness's maker.
+	Mark template.HTML
 }
 
 // webFacts are detailFacts for the page: short values, with the detail
@@ -17,12 +20,13 @@ type webFact struct {
 func webFacts(ws *Workspace, a *Agent) []webFact {
 	h, source := HarnessSource(ws, a)
 	where := map[string]string{"agent": "set for this agent", "workspace": "the workspace's default", "default": "the default"}[source]
-	facts := []webFact{{Label: "Harness", Value: h, Hint: h + " is " + where}}
+	harness := webFact{Label: "Harness", Value: h, Hint: h + " is " + where}
+	if m, ok := harnessMakers[h]; ok {
+		harness.Mark, harness.Hint = m.Mark, h+" by "+m.Company+", "+where
+	}
+	facts := []webFact{harness}
 	if m := agentModel(ws, a); m != "" {
 		facts = append(facts, webFact{Label: "Model", Value: m})
-	}
-	if a.Live != nil {
-		facts = append(facts, webFact{Label: "Pane", Value: a.Live.PaneID, Hint: "Herdr pane, " + a.Live.State()})
 	}
 	if !a.LastStarted.IsZero() {
 		facts = append(facts, webFact{Label: "Started", Value: shortWhen(ws.Scanned, a.LastStarted), Hint: a.LastStarted.Local().Format("Mon 02 Jan 2006 15:04")})

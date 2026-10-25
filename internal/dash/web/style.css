@@ -191,7 +191,8 @@ ul.items.queue .who { min-width: 90px; }
 .head-facts { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 4px 22px; margin: 6px 0 0; padding-top: 10px; border-top: 1px solid var(--line); }
 .head-facts div { display: flex; flex-direction: column; min-width: 0; }
 .head-facts dt { font-size: 11.5px; color: var(--dim); }
-.head-facts dd { margin: 0; font-size: 13px; font-variant-numeric: tabular-nums; }
+.head-facts dd { margin: 0; font-size: 13px; font-variant-numeric: tabular-nums; display: flex; align-items: center; gap: 5px; }
+.head-facts .mark { width: 13px; height: 13px; flex: none; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .avatar { color: hsl(var(--hue) 70% 85%); background: hsl(var(--hue) 35% 26%); } }
 :root[data-theme="dark"] .avatar { color: hsl(var(--hue) 70% 85%); background: hsl(var(--hue) 35% 26%); }
 @media (max-width: 640px) {

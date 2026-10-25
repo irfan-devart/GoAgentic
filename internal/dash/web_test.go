@@ -958,3 +958,15 @@ func TestShortDay(t *testing.T) {
 		}
 	}
 }
+
+func TestHeaderShowsTheHarnessMaker(t *testing.T) {
+	parent := webFleet(t)
+	h := NewWebHandler(WebSource{FleetRoot: parent, Options: livePanes(parent, "sigrid", "Sigrid - Lead", "idle")})
+	_, body := get(t, h, "/w/alpha/Sigrid")
+	if !strings.Contains(body, `title="claude by Anthropic`) || !strings.Contains(body, `<svg class="mark"`) {
+		t.Error("the header lacks the harness maker's mark")
+	}
+	if strings.Contains(body, "<dt>Pane</dt>") {
+		t.Error("the header still shows the pane")
+	}
+}
