@@ -175,7 +175,7 @@ ul.items.queue .who { min-width: 90px; }
 /* The agent's header: one band. Who (tile, name, state, title and when)
    on the left; what it runs on and how full its context is on the right. */
 .agent-head { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; margin: 0 0 14px; padding: 12px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
-.avatar { --hue: 250; flex: none; width: 42px; height: 42px; border-radius: 11px; display: grid; place-items: center; font-size: 19px; font-weight: 700; color: hsl(var(--hue) 45% 30%); background: hsl(var(--hue) 60% 90%); }
+.avatar { --hue: 250; flex: none; align-self: flex-start; margin-top: 2px; width: 42px; height: 42px; border-radius: 11px; display: grid; place-items: center; font-size: 19px; font-weight: 700; color: hsl(var(--hue) 45% 30%); background: hsl(var(--hue) 60% 90%); }
 .who-block { flex: 1; min-width: 220px; }
 .name-row { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 10px; }
 .agent-head .agent-name { font-size: 20px; font-weight: 700; line-height: 1.2; color: var(--fg); letter-spacing: -.01em; }
