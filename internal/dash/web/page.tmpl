@@ -314,6 +314,8 @@ main.addEventListener("keydown", e => {
 
 {{define "tracker"}}{{$href := .SessionHref}}
 <div class="info-cards">
+{{with .Focus}}<section class="card card-focus"><h3 class="card-head"><span class="cdot"></span>Session priorities<span class="agreed{{if not .Agreed}} pending{{end}}">{{if .Agreed}}agreed {{else}}proposed {{end}}{{.At.Local.Format "15:04"}}</span></h3>
+<ol class="focus-list">{{range .Items}}<li>{{.}}</li>{{end}}</ol>{{if not .Agreed}}<p class="dim sub">Waiting for you to agree in the chat.</p>{{end}}</section>{{end}}
 <section class="card card-foryou{{if not (or .Mine .Answered .Inbox)}} quiet{{end}}"><h3 class="card-head"><span class="cdot"></span>Waiting on you{{with .Mine}}<span class="pill">{{len .}}</span>{{end}}</h3>
 {{if or .Mine .Answered}}<ul class="items">{{range .Mine}}<li>{{template "item" .}}</li>{{end}}{{range .Answered}}<li>{{template "item" .}}</li>{{end}}</ul>{{else}}<p class="dim none">Nothing waiting on you.</p>{{end}}
 {{if .Inbox}}<p class="inbox-note">{{.Inbox}} scheduled run(s) not yet read: start {{.Name}} to drain its inbox</p>{{end}}</section>

@@ -1028,3 +1028,28 @@ func TestContextHealth(t *testing.T) {
 		}
 	}
 }
+
+func TestFindFocus(t *testing.T) {
+	at := time.Date(2026, 10, 25, 13, 45, 0, 0, time.Local)
+	declared := "Pane: Prime\n\n**Session focus.** Last session's line still holds:\n\n1. **#63 Web dashboard, step 3b: the send box.** This posts a message.\n   It is on a branch.\n2. **My own first tracker sweep.** It's small.\n3. Whatever time is left: the fleet. More here.\n\nAgree?"
+	chat := []ChatEntry{
+		{Kind: "you", Text: "/agents:start prime"},
+		{Kind: "agent", At: at, Text: declared},
+	}
+	f := findFocus(chat)
+	if f == nil || strings.Join(f.Items, "|") != "#63 Web dashboard, step 3b: the send box|My own first tracker sweep|Whatever time is left: the fleet" || f.Agreed {
+		t.Fatalf("focus = %+v", f)
+	}
+	chat = append(chat, ChatEntry{Kind: "you", Text: "yes"}, ChatEntry{Kind: "agent", Text: "1. done one thing\n2. and another"})
+	if f := findFocus(chat); f == nil || !f.Agreed || len(f.Items) != 3 {
+		t.Errorf("after the reply, focus = %+v (a list with no focus heading must not count)", f)
+	}
+	if got := focusLead("**#86** handover: wait for Mulail. Then more."); got != "#86 handover: wait for Mulail" {
+		t.Errorf("an id-only lead = %q", got)
+	}
+	// A focus re-declared later replaces the first.
+	chat = append(chat, ChatEntry{Kind: "agent", Text: "**Proposed focus**\n1. **#79 shared Holocron.** Read the reply."})
+	if f := findFocus(chat); f == nil || f.Items[0] != "#79 shared Holocron" || f.Agreed {
+		t.Errorf("re-declared focus = %+v", f)
+	}
+}

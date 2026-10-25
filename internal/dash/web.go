@@ -256,6 +256,8 @@ type agentRow struct {
 type webAgent struct {
 	Name, Title string
 	Head        webHead
+	// Focus is the running session's agreed priorities.
+	Focus *sessionFocus
 	// Usage is the running session's model and context use.
 	Usage *sessionUsage
 	// Initial and Hue make the header's tile.
@@ -513,6 +515,7 @@ func (s *webServer) agent(w http.ResponseWriter, r *http.Request) {
 	s.applyLaunch(ws, a, wa)
 	s.applyClose(ws, a, wa)
 	wa.Head = makeHead(ws, a, wa.Usage)
+
 	if last, ok := a.LastSession(); ok {
 		wa.LastSession = &last
 		wa.SessionHref = fileLink(ws, a, filepath.Join("memory", "sessions", last.File), all)
@@ -701,9 +704,13 @@ func (s *webServer) readChat(ws *Workspace, a *Agent, wa *webAgent) {
 		}
 		return
 	}
-	entries, err := s.chat.Chat(path, a.Name)
+	entries, err := s.chat.Session(path, a.Name)
 	if err != nil {
 		wa.ChatNote = "Could not read the session: " + err.Error()
+	}
+	wa.Focus = findFocus(entries)
+	if len(entries) > maxChat {
+		entries = entries[len(entries)-maxChat:]
 	}
 	replied := false
 	for _, e := range entries {

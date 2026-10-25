@@ -65,6 +65,15 @@ func NewChatCache() *ChatCache { return &ChatCache{files: map[string]*chatFile{}
 // Chat returns the part of the transcript at path that belongs to agent
 // (from its last /agents:start on), latest maxChat entries.
 func (c *ChatCache) Chat(path, agent string) ([]ChatEntry, error) {
+	out, err := c.Session(path, agent)
+	if len(out) > maxChat {
+		out = out[len(out)-maxChat:]
+	}
+	return out, err
+}
+
+// Session is Chat without the bound: the whole of the agent's session.
+func (c *ChatCache) Session(path, agent string) ([]ChatEntry, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	info, err := os.Stat(path)
@@ -94,9 +103,6 @@ func (c *ChatCache) Chat(path, agent string) ([]ChatEntry, error) {
 		if l.agent == agent {
 			out = append(out, l.ChatEntry)
 		}
-	}
-	if len(out) > maxChat {
-		out = out[len(out)-maxChat:]
 	}
 	return out, nil
 }
