@@ -30,6 +30,7 @@ var webFiles embed.FS
 
 var webTemplate = template.Must(template.New("page.tmpl").Funcs(template.FuncMap{
 	"trimHash": func(id string) string { return strings.TrimPrefix(id, "#") },
+	"trimPlan": func(next string) string { return strings.TrimPrefix(next, "» ") },
 }).ParseFS(webFiles, "web/page.tmpl"))
 
 // WebSource tells the server what to show. With FleetRoot set it serves

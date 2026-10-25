@@ -86,7 +86,7 @@ func TestWebFleetWorkspaceAgent(t *testing.T) {
 	}
 
 	_, body = get(t, h, "/w/alpha")
-	for _, want := range []string{"<h1>alpha</h1>", "Waiting on you", "Blocked by others", "Overdue", `class="acard" href="/w/alpha/Sigrid"`, "#5", "Tidy memory and links", "» #3 ship the thing"} {
+	for _, want := range []string{"<h1>alpha</h1>", "Waiting on you", "Blocked by others", "Overdue", `class="acard" href="/w/alpha/Sigrid"`, "#5", "Tidy memory and links", "Next</span> #3 ship the thing"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("workspace page lacks %q", want)
 		}
@@ -96,7 +96,7 @@ func TestWebFleetWorkspaceAgent(t *testing.T) {
 	for _, want := range []string{
 		"Sigrid", "Lead", "Next session", "Waiting on you",
 		`class="current" href="/w/alpha/Sigrid"`, `<span class="nm">Sigrid<small>Lead</small></span>`, `<div class="info"`, `<div class="chat-col">`, // the sidebar marks it; info beside the chat
-		`<span>Open actions</span> <span class="n dim">P1 1`, `<span class="dim">Parked</span> <span class="n dim">1</span>`, "Shipped it",
+		`Open actions<span class="pri-counts">P1 1`, `<summary>1 parked</summary>`, "Shipped it",
 		`href="/w/alpha/Sigrid/file?p=items%2F5-tidy-memory.md"`, // history note link
 		"Long detail | with a pipe",                              // the rest of the Action cell
 	} {

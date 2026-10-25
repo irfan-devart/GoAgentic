@@ -233,7 +233,7 @@ main.addEventListener("keydown", e => {
 {{define "navlink"}}<li data-name="{{.Name}}"><a class="{{if .Current}}current{{else if .Selected}}selected{{end}}{{if .Bold}} bold{{end}}" href="{{.Href}}"{{if .State}} title="{{.State}}"{{end}}><span class="dot {{if .Dot}}{{.Dot}}{{else}}off{{end}}"></span><span class="nm">{{.Name}}{{with .Sub}}<small>{{.}}</small>{{end}}</span>{{if .Badge}}<span class="badge" title="{{.Badge}} waiting on you">{{.Badge}}</span>{{end}}</a></li>{{end}}
 
 {{define "queue"}}
-<section class="card card-{{.Class}}{{if not .Total}} quiet{{end}}"><h2><span class="{{if .Total}}{{.Class}}{{end}}">{{.Title}}</span> <span class="n dim">{{.Total}}</span></h2>
+<section class="card card-{{.Class}}{{if not .Total}} quiet{{end}}"><h2 class="card-head"><span class="cdot"></span>{{.Title}}{{if .Total}}<span class="pill">{{.Total}}</span>{{end}}</h2>
 {{if .Top}}<ul class="items queue">{{range .Top}}{{template "qline" .}}{{end}}</ul>
 {{with .More}}<details class="more-queue" data-key="{{$.Key}}-more"><summary class="dim">{{len .}} more</summary><ul class="items queue">{{range .}}{{template "qline" .}}{{end}}</ul></details>{{end}}
 {{else}}<p class="dim none">{{.Empty}}</p>{{end}}
@@ -254,7 +254,7 @@ main.addEventListener("keydown", e => {
   <div class="ahead"><span class="dot {{.Tone}}"></span><span class="nm"><b>{{.Agent}}</b>{{with .Title}}<small>{{.}}</small>{{end}}</span>{{if .OnYou}}<span class="badge" title="{{.OnYou}} waiting on you">{{.OnYou}}</span>{{end}}</div>
   <div class="facts">{{with .Now}}{{template "state" .}}{{else}}<span class="{{.LiveClass}}">{{.Live}}</span>{{end}} · <span class="dim">{{.Harness}}</span>{{if ne .Started "—"}} · <span class="dim">started {{.Started}} ago</span>{{end}} · <span class="health-{{.Level}}" title="Health">{{.Health}}</span></div>
   {{with .Now}}{{with .Last}}<p class="last">“{{.}}”</p>{{end}}{{end}}
-  {{if .Next}}<p class="next"><span class="dim">Next</span> {{.Next}}{{if .NextBlocked}} <span class="blocked">■ blocked</span>{{else if .NextWaiting}} <span class="{{if .NextP1}}waiting{{else}}dim{{end}}">◆ waiting</span>{{end}}</p>{{end}}
+  {{if .Next}}<p class="next"><span class="dim">Next</span> {{trimPlan .Next}}{{if .NextBlocked}} <span class="blocked">■ blocked</span>{{else if .NextWaiting}} <span class="{{if .NextP1}}waiting{{else}}dim{{end}}">◆ waiting</span>{{end}}</p>{{end}}
 </a>{{end}}
 </div>
 {{end}}
@@ -262,7 +262,7 @@ main.addEventListener("keydown", e => {
 {{end}}
 
 {{define "item"}}<details class="item{{if .Answers}} answered{{end}}" data-key="{{.Key}}">
-<summary>{{if .Priority}}<span class="pri">{{.Priority}}</span> {{end}}<span class="id">#{{trimHash .ID}}</span> <span class="headline">{{.Headline}}</span>{{if .Late}} <span class="blocked tag">⚑ overdue</span>{{else if .Due}} <span class="dim tag">due {{.Due.Format "Mon 02 Jan"}}</span>{{end}}{{if .Note}} <span class="dim">{{.Note}}</span>{{end}}{{if .Answers}} <span class="ok tag">✓ answered, waiting on {{.Agent}}</span>{{else if .Reply}} <span class="answer-hint reply">Reply</span>{{else if .CanAnswer}} <span class="answer-hint">Answer</span>{{end}}</summary>
+<summary><span class="pri">{{.Priority}}</span> <span class="id">#{{trimHash .ID}}</span> <span class="ht"><span class="headline">{{.Headline}}</span>{{if .Late}} <span class="blocked tag">⚑ overdue</span>{{else if .Due}} <span class="dim tag">due {{.Due.Format "Mon 02 Jan"}}</span>{{end}}{{if .Note}} <span class="dim">{{.Note}}</span>{{end}}{{if .Answers}} <span class="ok tag">✓ answered, waiting on {{.Agent}}</span>{{else if .Reply}} <span class="answer-hint reply">Reply</span>{{else if .CanAnswer}} <span class="answer-hint">Answer</span>{{end}}</span></summary>
 <div class="more">
   {{if .Detail}}<p>{{.Detail}}</p>{{end}}
   <p class="dim">{{if .Owner}}Owner {{.Owner}}{{end}}{{if .Status}} · {{.Status}}{{end}}{{if .Due}} · due {{.Due.Format "2006-01-02"}}{{end}}</p>
@@ -302,24 +302,23 @@ main.addEventListener("keydown", e => {
 
 {{define "tracker"}}{{$href := .SessionHref}}
 <div class="info-cards">
-<section class="card card-foryou{{if not (or .Mine .Answered .Inbox)}} quiet{{end}}"><h3><span class="{{if or .Mine .Answered .Inbox}}foryou{{end}}">Waiting on you</span> <span class="n dim">{{len .Mine}}</span></h3>
-{{if or .Mine .Answered}}<ul class="items">{{range .Mine}}<li>{{template "item" .}}</li>{{end}}{{range .Answered}}<li>{{template "item" .}}</li>{{end}}</ul>{{else}}<p class="dim none">Nothing</p>{{end}}
-{{if .Inbox}}<p>{{.Inbox}} scheduled run(s) not yet read: start {{.Name}} to drain its inbox</p>{{end}}</section>
+<section class="card card-foryou{{if not (or .Mine .Answered .Inbox)}} quiet{{end}}"><h3 class="card-head"><span class="cdot"></span>Waiting on you{{with .Mine}}<span class="pill">{{len .}}</span>{{end}}</h3>
+{{if or .Mine .Answered}}<ul class="items">{{range .Mine}}<li>{{template "item" .}}</li>{{end}}{{range .Answered}}<li>{{template "item" .}}</li>{{end}}</ul>{{else}}<p class="dim none">Nothing waiting on you.</p>{{end}}
+{{if .Inbox}}<p class="inbox-note">{{.Inbox}} scheduled run(s) not yet read: start {{.Name}} to drain its inbox</p>{{end}}</section>
 
-{{if .ChatLive}}<section class="card card-plan fold"><details data-key="plan"><summary><h3><span class="plan">Plan from its last wrap</span> <span class="n dim">{{len .Plan}}</span></h3><span class="dim sub">The session beside may have moved on</span></summary>
-{{template "plan" .Plan}}</details></section>
-{{else}}<section class="card card-plan"><h3><span class="plan">Next session</span> <span class="n dim">{{len .Plan}}</span></h3>{{template "plan" .Plan}}</section>{{end}}
+<section class="card card-plan{{if not .Plan}} quiet{{end}}"><h3 class="card-head"><span class="cdot"></span>{{if .ChatLive}}Plan from its last wrap{{else}}Next session{{end}}</h3>
+{{if and .ChatLive .Plan}}<p class="dim sub">Set at its last wrap; the session beside may have moved on.</p>{{end}}{{template "plan" .Plan}}</section>
 
-{{if .Others}}<section class="card card-waiting"><h3><span class="waiting">Waiting on others ◆</span> <span class="n dim">{{len .Others}}</span></h3>{{template "section" .Others}}</section>{{end}}
-{{if .Blocked}}<section class="card card-blocked"><h3><span class="blocked">Blocked ■</span> <span class="n dim">{{len .Blocked}}</span></h3>{{template "section" .Blocked}}</section>{{end}}
-<section class="card"><h3><span>Open actions</span> <span class="n dim">P1 {{index .OpenCounts "P1"}} · P2 {{index .OpenCounts "P2"}} · P3 {{index .OpenCounts "P3"}}</span></h3>{{template "section" .Open}}</section>
-{{if .Parked}}<section class="card quiet fold"><details data-key="parked"><summary><h3><span class="dim">Parked</span> <span class="n dim">{{len .Parked}}</span></h3></summary>{{template "section" .Parked}}</details></section>{{end}}
+{{if .Others}}<section class="card card-waiting"><h3 class="card-head"><span class="cdot"></span>Waiting on others<span class="pill">{{len .Others}}</span></h3>{{template "section" .Others}}</section>{{end}}
+{{if .Blocked}}<section class="card card-blocked"><h3 class="card-head"><span class="cdot"></span>Blocked<span class="pill">{{len .Blocked}}</span></h3>{{template "section" .Blocked}}</section>{{end}}
+<section class="card card-open{{if not .Open}} quiet{{end}}"><h3 class="card-head"><span class="cdot"></span>Open actions<span class="pri-counts">P1 {{index .OpenCounts "P1"}}  P2 {{index .OpenCounts "P2"}}  P3 {{index .OpenCounts "P3"}}</span></h3>{{template "section" .Open}}</section>
 
-<section class="card quiet meta">
-{{with .LastSession}}<p>Last session: {{if not .Date.IsZero}}{{.Date.Format "Mon 02 Jan"}} — {{end}}<a href="{{$href}}">{{.Title}}</a></p>{{end}}
+<footer class="info-foot">
+{{if .Parked}}<details data-key="parked"><summary>{{len .Parked}} parked</summary>{{template "section" .Parked}}</details>{{end}}
+{{with .LastSession}}<p>Last session {{if not .Date.IsZero}}{{.Date.Format "Mon 02 Jan"}}: {{end}}<a href="{{$href}}">{{.Title}}</a></p>{{end}}
 {{if .Health.Findings}}<p class="health-{{.Health.Level}}">Health {{.Health.Level.Symbol}}</p><ul>{{range .Health.Findings}}<li>{{.}}</li>{{end}}</ul>
-{{else}}<p class="dim">Health <span class="ok">✓</span> {{.HealthLine}}</p>{{end}}
-</section>
+{{else}}<p>Health <span class="ok">✓</span> {{.HealthLine}}</p>{{end}}
+</footer>
 </div>
 {{end}}
 

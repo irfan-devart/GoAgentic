@@ -1,21 +1,21 @@
 /* The TUI's palette: amber means waiting on you, orange a P1 waiting on
    others, red blocked or failing, green working. */
 :root {
-  --bg: #fbfbfa; --fg: #1d1d1f; --dim: #74747a; --line: #e4e4e2; --hover: #f1f1ef;
+  --bg: #f6f6f4; --surface: #ffffff; --fg: #1d1d1f; --dim: #6e6e73; --line: #e6e6e3; --hover: #f0f0ed;
   --title: #5b4ad6; --ok: #1f9e6e; --foryou: #a87a12; --waiting: #c9621a;
   --blocked: #d63b3b; --accent: #2f7fc6;
   --side: #2c2541; --side-top: #211b33; --side-fg: #d9d5e6; --side-dim: #9d96b5; --side-hover: #3a3254; --side-current: #5b4ad6;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #16161a; --fg: #e6e6e6; --dim: #8a8a8f; --line: #2a2a30; --hover: #1f1f25;
+    --bg: #141417; --surface: #1c1c21; --fg: #e6e6e6; --dim: #8a8a8f; --line: #2c2c33; --hover: #24242a;
     --title: #9d91f5; --ok: #65d1a7; --foryou: #e5c07b; --waiting: #f0883e;
     --blocked: #ff5f5f; --accent: #61afef;
     --side: #1d1a29; --side-top: #141220; --side-current: #4a3cc0; --side-hover: #2a2540;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #16161a; --fg: #e6e6e6; --dim: #8a8a8f; --line: #2a2a30; --hover: #1f1f25;
+  --bg: #141417; --surface: #1c1c21; --fg: #e6e6e6; --dim: #8a8a8f; --line: #2c2c33; --hover: #24242a;
   --title: #9d91f5; --ok: #65d1a7; --foryou: #e5c07b; --waiting: #f0883e;
   --blocked: #ff5f5f; --accent: #61afef;
     --side: #1d1a29; --side-top: #141220; --side-current: #4a3cc0; --side-hover: #2a2540;
@@ -77,13 +77,14 @@ pre.file { white-space: pre-wrap; word-break: break-word; background: var(--hove
   ul.items > li { flex-direction: column; gap: 0; }
   td.next { min-width: 200px; }
 }
-.tag { font-size: 12px; }
+.tag { font-size: 12px; white-space: nowrap; }
+.answer-hint { white-space: nowrap; }
 .answer-hint { font-size: 12px; color: var(--foryou); border: 1px solid currentColor; border-radius: 10px; padding: 0 7px; margin-left: 4px; }
 details[open] .answer-hint { display: none; }
 details.answered summary .headline { color: var(--dim); }
 blockquote.given { margin: 6px 0; padding: 4px 10px; border-left: 3px solid var(--ok); white-space: pre-wrap; }
 form.answer { margin: 8px 0 4px; max-width: 640px; }
-form.answer textarea { width: 100%; font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; resize: vertical; }
+form.answer textarea { width: 100%; font: inherit; color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; resize: vertical; }
 form.answer textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 form.answer .row { display: flex; gap: 10px; align-items: center; margin-top: 4px; flex-wrap: wrap; }
 form.answer button { font: inherit; padding: 4px 12px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; }
@@ -94,11 +95,11 @@ form.answer button:disabled { opacity: .5; cursor: default; }
 form.answer .status { color: var(--dim); font-size: 13px; }
 form.answer .status.error { color: var(--blocked); }
 .hint { font-size: 12px; }
-.chat { overflow-y: auto; max-height: 70vh; min-height: 200px; border: 1px solid var(--line); border-radius: 8px; padding: 10px; background: var(--hover); display: flex; flex-direction: column; gap: 8px; }
+.chat { overflow-y: auto; max-height: 70vh; min-height: 200px; border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: var(--hover); display: flex; flex-direction: column; gap: 8px; }
 .msg { display: flex; flex-direction: column; max-width: 92%; }
 .msg.you { align-self: flex-end; align-items: flex-end; }
 .msg.agent { align-self: flex-start; }
-.bubble { white-space: pre-wrap; word-break: break-word; padding: 7px 11px; border-radius: 10px; background: var(--bg); border: 1px solid var(--line); }
+.bubble { white-space: pre-wrap; word-break: break-word; padding: 8px 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); }
 .msg.you .bubble { background: var(--accent); color: #fff; border-color: var(--accent); }
 .bubble code { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--hover); padding: 0 3px; border-radius: 3px; }
 .bubble pre { white-space: pre-wrap; font: 12.5px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--hover); padding: 6px 8px; border-radius: 6px; margin: 4px 0; }
@@ -115,29 +116,52 @@ form.send { max-width: none; }
 .spin { display: inline-block; width: 1.2em; color: var(--accent); font-family: ui-monospace, monospace; }
 .ended { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--hover); margin: 0 0 4px; }
 
-/* The workspace home: three cards (waiting on you, on others, overdue),
-   then a card per agent. */
-.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin: 14px 0 6px; align-items: start; }
-.card { border: 1px solid var(--line); border-top: 3px solid var(--dim); border-radius: 8px; padding: 8px 12px 6px; background: var(--bg); min-width: 0; }
-.card-foryou { border-top-color: var(--foryou); } .card-waiting { border-top-color: var(--waiting); } .card-blocked { border-top-color: var(--blocked); }
-.card.quiet { border-top-color: var(--line); }
-.card h2 > span:first-child:not([class]) { color: var(--dim); }
-.card h2 { margin: 0 0 4px; font-size: 15px; display: flex; justify-content: space-between; }
-.card h2 .n { font-variant-numeric: tabular-nums; }
-.card ul.items > li { flex-direction: column; gap: 0; }
-.card ul.items.queue .who { min-width: 0; font-size: 12px; }
-.card ul.items.queue > li:last-child { border-bottom: 0; }
-.card .none { margin: 4px 0 6px; }
-.agent-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin: 6px 0 10px; }
-.acard { display: block; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; color: inherit; text-decoration: none; min-width: 0; }
-.acard:hover { background: var(--hover); text-decoration: none; }
-.acard .ahead { display: flex; align-items: center; gap: 8px; }
+/* Cards, on the workspace home and the agent page. Plain panels on the
+   canvas; a dot and a count pill say what kind of list each is. Only
+   "Waiting on you" is tinted: it is the one that needs the principal. */
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin: 16px 0 8px; align-items: start; }
+.card { --tone: var(--dim); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px 6px; min-width: 0; }
+.card-foryou { --tone: var(--foryou); } .card-waiting { --tone: var(--waiting); } .card-blocked { --tone: var(--blocked); } .card-plan { --tone: var(--ok); }
+.card-foryou:not(.quiet) { background: color-mix(in srgb, var(--foryou) 6%, var(--surface)); border-color: color-mix(in srgb, var(--foryou) 30%, var(--line)); }
+.card-head { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; font-size: 14px; font-weight: 600; color: var(--fg); }
+.card-head .cdot { width: 8px; height: 8px; border-radius: 50%; background: var(--tone); flex: none; }
+.card.quiet .card-head { color: var(--dim); font-weight: 500; }
+.card.quiet .cdot { background: transparent; box-shadow: inset 0 0 0 1.5px var(--line); }
+.pill { margin-left: auto; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 20px; min-width: 22px; padding: 0 7px; text-align: center; border-radius: 10px; color: var(--tone); background: color-mix(in srgb, var(--tone) 13%, transparent); }
+.pri-counts { margin-left: auto; font-size: 12px; font-weight: 400; color: var(--dim); white-space: pre; font-variant-numeric: tabular-nums; }
+.card ul.items > li { flex-direction: column; gap: 1px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.card ul.items > li:last-child { border-bottom: 0; }
+.card ul.items .who { min-width: 0; font-size: 12px; }
+.card ul.items .who a { color: var(--dim); font-weight: 500; }
+.card ul.items .who a:hover { color: var(--accent); text-decoration: none; }
+.card .none { margin: 2px 0 10px; }
+.card .sub { font-size: 12px; margin: -2px 0 6px; }
+.card .more-queue > summary { padding: 8px 0; font-size: 13px; border-top: 1px solid var(--line); }
+.card .plan-steps { margin: 2px 0 10px; padding-left: 20px; }
+.card .plan-steps li { padding: 2px 0; }
+.card .plan-steps li::marker { color: var(--dim); font-variant-numeric: tabular-nums; }
+.card .inbox-note { font-size: 13px; margin: 4px 0 10px; }
+.pri { display: inline-block; font-size: 11px; font-weight: 600; color: var(--dim); }
+/* An item: priority and number in fixed columns, the headline and its
+   tags wrapping beside them. */
+details.item > summary { display: flex; align-items: baseline; gap: 6px; }
+details.item > summary .pri { flex: none; width: 20px; }
+details.item > summary .id { flex: none; min-width: 30px; }
+details.item > summary .ht { flex: 1; min-width: 0; }
+.headline { color: var(--fg); }
+.agent-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; margin: 8px 0 12px; }
+.acard { display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; color: inherit; text-decoration: none; min-width: 0; }
+.acard:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); text-decoration: none; }
+.acard .ahead { display: flex; align-items: flex-start; gap: 10px; }
+.acard .ahead .dot { margin-top: 6px; }
 .acard .nm { flex: 1; min-width: 0; }
-.acard .nm b { color: var(--accent); }
+.acard .nm b { color: var(--fg); font-size: 15px; font-weight: 600; }
 .acard .nm small { display: block; font-size: 12px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.acard .facts { font-size: 13px; margin: 6px 0 0; }
-.acard .last { margin: 6px 0 0; font-size: 13px; color: var(--dim); overflow-wrap: anywhere; }
-.acard .next { margin: 6px 0 0; font-size: 13px; overflow-wrap: anywhere; }
+.acard .facts { font-size: 12px; margin: 8px 0 0; color: var(--dim); }
+.acard .last { margin: 8px 0 0; font-size: 13px; color: var(--dim); overflow-wrap: anywhere; font-style: italic; }
+.acard .next { margin: 10px 0 0; padding-top: 10px; border-top: 1px solid var(--line); font-size: 13px; overflow-wrap: anywhere; }
+.acard .next > .dim:first-child { display: block; font-size: 12px; margin-bottom: 2px; }
+.dot.off, .acard .dot:not(.blocked):not(.waiting):not(.foryou):not(.working) { background: transparent; box-shadow: inset 0 0 0 1.5px var(--dim); }
 .state { font-size: 13px; }
 .activity { color: var(--waiting); font-weight: 600; }
 .chat .msg.working { display: block; margin: 0; font-size: 13px; }
@@ -153,21 +177,17 @@ ul.items.queue .who { min-width: 90px; }
 .agent-head .state { font-size: 14px; font-weight: 600; }
 .agent-head form.close { margin: 0 0 0 auto; display: flex; gap: 10px; align-items: center; }
 .agent-head form.close .status { font-size: 13px; }
-/* The agent's tracker as a stack of cards, like the workspace home's. */
-.info-cards { display: flex; flex-direction: column; gap: 10px; }
-.card h3 { margin: 0 0 4px; font-size: 14px; display: flex; justify-content: space-between; gap: 8px; }
-.card h3 .n { font-weight: 400; font-variant-numeric: tabular-nums; }
-.card-plan { border-top-color: var(--ok); }
-.card .plan-steps { margin: 2px 0 4px; }
-.card ul.items > li { border-bottom: 1px solid var(--line); padding: 4px 0; }
-.card ul.items > li:last-child { border-bottom: 0; }
-.card.fold > details > summary { cursor: pointer; list-style: none; }
-.card.fold > details > summary::-webkit-details-marker { display: none; }
-.card.fold > details:not([open]) h3 { margin-bottom: 0; }
-.card .sub { display: block; font-size: 12px; margin: -2px 0 4px; }
-.card.meta { font-size: 13px; border-top-width: 1px; }
-.card.meta p { margin: 2px 0; }
-.card.meta ul { margin: 2px 0; padding-left: 18px; }
+/* The agent's tracker: the same cards, stacked; parked items, the last
+   session and health in a quiet footer under them. */
+.info-cards { display: flex; flex-direction: column; gap: 12px; }
+.card h3.card-head { font-size: 14px; }
+.info-foot { font-size: 13px; color: var(--dim); padding: 2px 4px 8px; }
+.info-foot p { margin: 4px 0; }
+.info-foot ul { margin: 2px 0; padding-left: 18px; }
+.info-foot details > summary { cursor: pointer; margin: 4px 0; }
+.info-foot details[open] { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 4px 16px 6px; margin-bottom: 8px; }
+.info-foot details ul.items > li { padding: 6px 0; border-bottom: 1px solid var(--line); }
+.info-foot details ul.items > li:last-child { border-bottom: 0; }
 .chat-col { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .chat-col .ended, .chat-col .loading { margin-bottom: 8px; }
 .composer { margin-top: 8px; border-radius: 8px; }
@@ -227,3 +247,4 @@ ul.items.queue .who { min-width: 90px; }
   .chat-col .chat { max-height: 65vh; min-height: 240px; }
   .info { overflow: visible; }
 }
+.card ul.items > li > .tag { padding-left: 62px; }
