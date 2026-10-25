@@ -143,8 +143,7 @@ main.addEventListener("keydown", e => {
 {{end}}</nav>
 <section class="content" data-scroll="content">
 {{if .Counts}}{{template "counts" .}}{{end}}
-{{if .Now}}{{template "now" .}}{{end}}
-{{if .Queue}}{{template "queue" .Queue}}{{end}}
+{{if .Queue}}<div class="cards">{{template "queue" .Queue}}{{template "queue" .Others}}{{template "queue" .Overdue}}</div>{{end}}
 {{if .Workspace}}{{template "workspace" .}}{{end}}
 {{if .Agent}}{{template "agent" .}}{{end}}
 {{with .File}}<h2>{{.Name}}</h2><pre class="file">{{.Text}}</pre>{{end}}
@@ -170,28 +169,15 @@ main.addEventListener("keydown", e => {
 
 {{define "navlink"}}<li data-name="{{.Name}}"><a class="{{if .Current}}current{{else if .Selected}}selected{{end}}{{if .Bold}} bold{{end}}" href="{{.Href}}"{{if .State}} title="{{.State}}"{{end}}><span class="dot {{if .Dot}}{{.Dot}}{{else}}off{{end}}"></span><span class="nm">{{.Name}}{{with .Sub}}<small>{{.}}</small>{{end}}</span>{{if .Badge}}<span class="badge" title="{{.Badge}} waiting on you">{{.Badge}}</span>{{end}}</a></li>{{end}}
 
-{{define "now"}}
-<section class="now"><h2>Now <span class="dim">— sessions running in a pane</span></h2>
-<div class="scroll"><table class="now">
-<tbody>
-{{range .Now}}<tr class="{{.Class}}">
-  <td class="who"><a href="{{.Href}}">{{.Agent}}</a></td>
-  <td class="st">{{template "state" .}}</td>
-  <td class="last dim">{{.Last}}</td>
-</tr>{{end}}
-</tbody></table></div>
-</section>
-{{end}}
-
 {{define "queue"}}
-<section class="queue"><h2 class="foryou">Waiting on you <span class="dim">— {{.Total}}, most urgent first</span></h2>
+<section class="card card-{{.Class}}{{if not .Total}} quiet{{end}}"><h2><span class="{{if .Total}}{{.Class}}{{end}}">{{.Title}}</span> <span class="n dim">{{.Total}}</span></h2>
 {{if .Top}}<ul class="items queue">{{range .Top}}{{template "qline" .}}{{end}}</ul>
-{{with .More}}<details class="more-queue" data-key="queue-more"><summary class="dim">{{len .}} more</summary><ul class="items queue">{{range .}}{{template "qline" .}}{{end}}</ul></details>{{end}}
-{{else}}<p class="dim none">Nothing waiting on you.</p>{{end}}
+{{with .More}}<details class="more-queue" data-key="{{$.Key}}-more"><summary class="dim">{{len .}} more</summary><ul class="items queue">{{range .}}{{template "qline" .}}{{end}}</ul></details>{{end}}
+{{else}}<p class="dim none">{{.Empty}}</p>{{end}}
 </section>
 {{end}}
 
-{{define "qline"}}<li><span class="who"><a href="{{.AgentHref}}">{{.Agent}}</a></span> {{if .Item}}{{template "item" .Item}}{{else}}<span>{{.Text}}</span>{{end}}</li>{{end}}
+{{define "qline"}}<li><span class="who"><a href="{{.AgentHref}}">{{.Agent}}</a></span> {{if .Item}}{{template "item" .Item}}{{with .Tag}} <span class="tag {{$.TagClass}}">{{.}}</span>{{end}}{{else}}<span>{{.Text}}</span>{{end}}</li>{{end}}
 
 {{define "legend"}}
 <p class="legend dim"><span class="dot blocked"></span> blocked <span class="dot waiting"></span> P1 waiting on others <span class="dot foryou"></span> waiting on you <span class="dot working"></span> working · no dot: nothing to act on</p>
@@ -200,20 +186,14 @@ main.addEventListener("keydown", e => {
 {{define "workspace"}}
 {{with .Workspace}}
 <h2>Agents</h2>
-<div class="scroll"><table>
-<thead><tr><th></th><th>Agent</th><th>Harness</th><th>Session</th><th class="n">On you</th><th>Started</th><th>Health</th><th>Next up</th></tr></thead>
-<tbody>
-{{range .Rows}}<tr>
-  <td><span class="dot {{.Tone}}"></span></td>
-  <td><a href="{{.Href}}">{{.Agent}}</a></td>
-  <td class="dim">{{.Harness}}</td>
-  <td class="{{.LiveClass}}">{{.Live}}</td>
-  <td class="n {{if .OnYou}}foryou{{else}}dim{{end}}">{{.OnYou}}</td>
-  <td class="dim">{{.Started}}</td>
-  <td class="health-{{.Level}}">{{.Health}}</td>
-  <td class="next">{{.Next}}{{if .NextBlocked}} <span class="blocked">■ blocked</span>{{else if .NextWaiting}} <span class="{{if .NextP1}}waiting{{else}}dim{{end}}">◆ waiting</span>{{end}}</td>
-</tr>{{end}}
-</tbody></table></div>
+<div class="agent-cards">
+{{range .Rows}}<a class="acard" href="{{.Href}}">
+  <div class="ahead"><span class="dot {{.Tone}}"></span><span class="nm"><b>{{.Agent}}</b>{{with .Title}}<small>{{.}}</small>{{end}}</span>{{if .OnYou}}<span class="badge" title="{{.OnYou}} waiting on you">{{.OnYou}}</span>{{end}}</div>
+  <div class="facts">{{with .Now}}{{template "state" .}}{{else}}<span class="{{.LiveClass}}">{{.Live}}</span>{{end}} · <span class="dim">{{.Harness}}</span>{{if ne .Started "—"}} · <span class="dim">started {{.Started}} ago</span>{{end}} · <span class="health-{{.Level}}" title="Health">{{.Health}}</span></div>
+  {{with .Now}}{{with .Last}}<p class="last">“{{.}}”</p>{{end}}{{end}}
+  {{if .Next}}<p class="next"><span class="dim">Next</span> {{.Next}}{{if .NextBlocked}} <span class="blocked">■ blocked</span>{{else if .NextWaiting}} <span class="{{if .NextP1}}waiting{{else}}dim{{end}}">◆ waiting</span>{{end}}</p>{{end}}
+</a>{{end}}
+</div>
 {{end}}
 {{template "legend"}}
 {{end}}

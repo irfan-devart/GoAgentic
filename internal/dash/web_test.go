@@ -84,7 +84,7 @@ func TestWebFleetWorkspaceAgent(t *testing.T) {
 	}
 
 	_, body = get(t, h, "/w/alpha")
-	for _, want := range []string{"<h1>alpha</h1>", "Waiting on you", `href="/w/alpha/Sigrid"`, "#5", "Tidy memory and links", "» #3 ship the thing"} {
+	for _, want := range []string{"<h1>alpha</h1>", "Waiting on you", "Blocked by others", "Overdue", `class="acard" href="/w/alpha/Sigrid"`, "#5", "Tidy memory and links", "» #3 ship the thing"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("workspace page lacks %q", want)
 		}
@@ -768,6 +768,33 @@ func TestQueueRanksAcrossAgents(t *testing.T) {
 	}
 }
 
+func TestCardsOthersAndOverdue(t *testing.T) {
+	day := func(d int) *time.Time { t := now.AddDate(0, 0, d); return &t }
+	ws := &Workspace{Name: "alpha", Principal: "Norman Noble", Scanned: now, Agents: []*Agent{
+		{Name: "Sigrid", Open: []Item{
+			{ID: "#1", Action: "Mine, late", Owner: "Norman", Status: "Waiting on Norman", Due: day(-2)},
+			{ID: "#2", Action: "Dario's call", Owner: "Sigrid", Priority: "P2", Status: "Waiting on Dario"},
+			{ID: "#3", Action: "Stuck", Owner: "Sigrid", Priority: "P1", Status: "Blocked", Due: day(-5)},
+			{ID: "#4", Action: "Shelved", Owner: "Sigrid", Status: "Parked", Due: day(-9)},
+		}},
+	}}
+	ids := func(lines []queueLine) string {
+		q := makeQueue(lines, 10)
+		var out []string
+		for _, l := range q.Top {
+			out = append(out, strings.TrimSpace(l.Item.ID+" "+l.Tag))
+		}
+		return strings.TrimSpace(strings.Join(out, "|"))
+	}
+	if got, want := ids(othersLines(ws, false)), "#3 ■ blocked|#2 ◆ waiting on Dario"; got != want {
+		t.Errorf("others = %q, want %q", got, want)
+	}
+	// Overdue takes any owner, longest overdue first; parked is not overdue.
+	if got, want := ids(overdueLines(ws, false)), "#3|#1"; got != want {
+		t.Errorf("overdue = %q, want %q", got, want)
+	}
+}
+
 func TestWebSidebarReorder(t *testing.T) {
 	parent := webFleet(t)
 	write(t, filepath.Join(parent, "alpha/agents/Astrid/context.md"), "---\ntitle: Partner\n---\n")
@@ -793,9 +820,9 @@ func TestWebSidebarReorder(t *testing.T) {
 	if !before(body, "Beta", "alpha") || !before(body, "Sigrid", "Astrid") {
 		t.Errorf("saved order not shown:\n%s", body)
 	}
-	// The home's agent table follows it too.
-	if i, j := strings.Index(body, `<td><a href="/w/alpha/Sigrid">`), strings.Index(body, `<td><a href="/w/alpha/Astrid">`); i < 0 || j < i {
-		t.Error("agent table must follow the sidebar order")
+	// The home's agent cards follow it too.
+	if i, j := strings.Index(body, `class="acard" href="/w/alpha/Sigrid"`), strings.Index(body, `class="acard" href="/w/alpha/Astrid"`); i < 0 || j < i {
+		t.Error("agent cards must follow the sidebar order")
 	}
 	for name, c := range map[string]struct {
 		form   url.Values

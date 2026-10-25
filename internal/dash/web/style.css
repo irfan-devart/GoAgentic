@@ -115,20 +115,29 @@ form.send { max-width: none; }
 .spin { display: inline-block; width: 1.2em; color: var(--accent); font-family: ui-monospace, monospace; }
 .ended { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--hover); margin: 0 0 4px; }
 
-/* Now and the queue lead the fleet and workspace pages. */
-section.now, section.queue { margin-top: 14px; }
-table.now { margin-top: 4px; }
-table.now td { border-bottom: 1px solid var(--line); }
-table.now td.who { white-space: nowrap; width: 1%; padding-left: 0; }
-table.now td.st { white-space: nowrap; width: 1%; }
-table.now td.last { overflow-wrap: anywhere; }
-@media (max-width: 640px) {
-  /* A phone: the agent's last words go on their own line. */
-  table.now tr { display: grid; grid-template-columns: auto 1fr; border-bottom: 1px solid var(--line); }
-  table.now td { border-bottom: 0; width: auto; padding: 4px 8px 0 0; }
-  table.now td.last { grid-column: 1 / -1; padding: 0 0 6px; }
-}
-table.now tr.foryou td.st, table.now tr.blocked td.st { font-weight: 600; }
+/* The workspace home: three cards (waiting on you, on others, overdue),
+   then a card per agent. */
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin: 14px 0 6px; align-items: start; }
+.card { border: 1px solid var(--line); border-top: 3px solid var(--dim); border-radius: 8px; padding: 8px 12px 6px; background: var(--bg); min-width: 0; }
+.card-foryou { border-top-color: var(--foryou); } .card-waiting { border-top-color: var(--waiting); } .card-blocked { border-top-color: var(--blocked); }
+.card.quiet { border-top-color: var(--line); }
+.card h2 > span:first-child:not([class]) { color: var(--dim); }
+.card h2 { margin: 0 0 4px; font-size: 15px; display: flex; justify-content: space-between; }
+.card h2 .n { font-variant-numeric: tabular-nums; }
+.card ul.items > li { flex-direction: column; gap: 0; }
+.card ul.items.queue .who { min-width: 0; font-size: 12px; }
+.card ul.items.queue > li:last-child { border-bottom: 0; }
+.card .none { margin: 4px 0 6px; }
+.agent-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin: 6px 0 10px; }
+.acard { display: block; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; color: inherit; text-decoration: none; min-width: 0; }
+.acard:hover { background: var(--hover); text-decoration: none; }
+.acard .ahead { display: flex; align-items: center; gap: 8px; }
+.acard .nm { flex: 1; min-width: 0; }
+.acard .nm b { color: var(--accent); }
+.acard .nm small { display: block; font-size: 12px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.acard .facts { font-size: 13px; margin: 6px 0 0; }
+.acard .last { margin: 6px 0 0; font-size: 13px; color: var(--dim); overflow-wrap: anywhere; }
+.acard .next { margin: 6px 0 0; font-size: 13px; overflow-wrap: anywhere; }
 .state { font-size: 13px; }
 ul.items.queue > li { border-bottom: 1px solid var(--line); padding: 5px 0; }
 ul.items.queue .who { min-width: 90px; }

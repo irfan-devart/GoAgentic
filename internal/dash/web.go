@@ -194,10 +194,9 @@ type page struct {
 	Live    bool
 	Counts  *Counts
 	First   string
-	// Now and Queue lead the workspace's home: the running
-	// sessions, and what waits on the principal, ranked (web_views.go).
-	Now   []nowLine
-	Queue *queueView
+	// Queue, Others and Overdue lead the workspace's home as cards: what
+	// waits on the principal, on others, and what is overdue (web_views.go).
+	Queue, Others, Overdue *queueView
 	// Nav is the app shell: workspace picker and sidebar (web_nav.go).
 	Nav *nav
 
@@ -216,6 +215,9 @@ type agentRow struct {
 	NextP1                bool
 	// OnYou counts what waits on the principal: items and unread runs.
 	OnYou int
+	Title string
+	// Now is the agent's running session, when it has one.
+	Now *nowLine
 }
 
 type webAgent struct {
@@ -382,18 +384,32 @@ func (s *webServer) workspace(w http.ResponseWriter, r *http.Request) {
 	p := page{
 		Title: ws.Name, Heading: ws.Name, All: all, Scanned: ws.Scanned, Live: ws.Live,
 		Counts: &c, First: firstName(ws.Principal), Workspace: &webWorkspace{},
-		Now: s.nowLines(ws, all), Nav: s.workspaceNav(ws, "", all),
+		Nav: s.workspaceNav(ws, "", all),
 	}
-	sortNow(p.Now)
-	p.Queue = makeQueue(queueLines(ws, all), 8)
+	// Three cards lead: what waits on the principal, on others, and what
+	// is overdue; then a card per agent.
+	p.Queue = makeQueue(queueLines(ws, all), 6)
+	p.Queue.Title, p.Queue.Class, p.Queue.Empty, p.Queue.Key = "Waiting on you", "foryou", "Nothing waiting on you.", "q-you"
+	p.Others = makeQueue(othersLines(ws, all), 6)
+	p.Others.Title, p.Others.Class, p.Others.Empty, p.Others.Key = "Blocked by others", "waiting", "Nothing waiting on others.", "q-others"
+	p.Overdue = makeQueue(overdueLines(ws, all), 6)
+	p.Overdue.Title, p.Overdue.Class, p.Overdue.Empty, p.Overdue.Key = "Overdue", "blocked", "Nothing overdue.", "q-overdue"
 	// The home opens this workspace next time.
 	http.SetCookie(w, &http.Cookie{Name: "ws", Value: ws.Name, Path: "/", MaxAge: 365 * 24 * 3600, HttpOnly: true, SameSite: http.SameSiteLaxMode})
+	now := map[string]nowLine{}
+	for _, l := range s.nowLines(ws, all) {
+		now[l.Agent] = l
+	}
 	for _, a := range s.agentsInOrder(ws) {
 		row := MakeRow(ws, a)
-		p.Workspace.Rows = append(p.Workspace.Rows, agentRow{
+		ar := agentRow{
 			Row: row, Href: link(all, "w", ws.Name, a.Name), Tone: toneClass(agentTone(ws, a)), LiveClass: liveClass(row.Live),
-			NextP1: strings.HasPrefix(row.Next, "P1 "), OnYou: len(a.ForPrincipal(ws.Principal)) + a.InboxUnprocessed,
-		})
+			NextP1: strings.HasPrefix(row.Next, "P1 "), OnYou: len(a.ForPrincipal(ws.Principal)) + a.InboxUnprocessed, Title: a.Title,
+		}
+		if l, ok := now[a.Name]; ok {
+			ar.Now = &l
+		}
+		p.Workspace.Rows = append(p.Workspace.Rows, ar)
 	}
 	s.render(w, r, p)
 }

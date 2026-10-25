@@ -7,10 +7,10 @@ import (
 	"unicode/utf8"
 )
 
-// The two views every page leads with. Now is the sessions running in a
-// pane, the only time-critical part: an agent whose turn has ended waits for
-// a reply in its chat. The queue is what waits on the principal in the
-// trackers, ranked across agents, answered at any time.
+// The workspace home's views. The cards are what waits on the principal in
+// the trackers, on others, and what is overdue, ranked across agents. Each
+// agent's card shows its running session, if any: an agent whose turn has
+// ended waits for a reply in its chat.
 
 // nowLine is one running session.
 type nowLine struct {
@@ -21,12 +21,11 @@ type nowLine struct {
 	Working      bool
 	// Last is the start of the agent's last message, when its chat can be
 	// read.
-	Last  string
-	order int
+	Last string
 }
 
 // nowLines lists the workspace's running sessions of the principal's own
-// (not peer or task panes): its turn ended first, then working.
+// (not peer or task panes).
 func (s *webServer) nowLines(ws *Workspace, all bool) []nowLine {
 	var out []nowLine
 	for _, a := range ws.Agents {
@@ -36,22 +35,18 @@ func (s *webServer) nowLines(ws *Workspace, all bool) []nowLine {
 		l := nowLine{Agent: a.Name, Href: link(all, "w", ws.Name, a.Name)}
 		switch {
 		case a.Live.Status == "blocked":
-			l.State, l.Class, l.order = "prompt in its pane", "blocked", 0
+			l.State, l.Class = "prompt in its pane", "blocked"
 		case settled(a.Live):
-			l.State, l.Class, l.order = "your turn", "foryou", 1
+			l.State, l.Class = "your turn", "foryou"
 		case a.Live.Status == "working":
-			l.State, l.Class, l.Working, l.order = "working", "ok", true, 2
+			l.State, l.Class, l.Working = "working", "ok", true
 		default:
-			l.State, l.Class, l.order = a.Live.State(), "dim", 3
+			l.State, l.Class = a.Live.State(), "dim"
 		}
 		l.Last = s.lastSaid(ws, a)
 		out = append(out, l)
 	}
 	return out
-}
-
-func sortNow(lines []nowLine) {
-	sort.SliceStable(lines, func(i, j int) bool { return lines[i].order < lines[j].order })
 }
 
 // lastSaid is the first line of the agent's last message in its running
@@ -90,6 +85,8 @@ type queueLine struct {
 	Item             *webItem
 	Text             string
 	Overdue          bool
+	// Tag says what an item waits on, when not the principal.
+	Tag, TagClass string
 	// rank orders the queue: overdue, P1–P3, no priority, unread runs,
 	// answered; pri orders the overdue among themselves.
 	rank, pri int
@@ -145,11 +142,64 @@ func sortQueue(lines []queueLine) {
 	})
 }
 
+// othersLines lists what waits on someone else, blocked or waiting on
+// another owner, overdue first, then by priority.
+func othersLines(ws *Workspace, all bool) []queueLine {
+	var out []queueLine
+	for _, a := range ws.Agents {
+		seen := map[string]bool{}
+		add := func(it Item, tag, class string) {
+			if seen[it.ID] {
+				return
+			}
+			seen[it.ID] = true
+			wi := makeWebItem(ws, a, it, all)
+			l := queueLine{Agent: a.Name, AgentHref: link(all, "w", ws.Name, a.Name), Item: &wi, Tag: tag, TagClass: class}
+			l.Overdue = it.Overdue(ws.Scanned)
+			l.pri = min(priorityRank(it.Priority), 4)
+			l.rank = l.pri
+			if l.Overdue {
+				l.rank = 0
+			}
+			out = append(out, l)
+		}
+		for _, it := range a.BlockedItems() {
+			add(it, "■ blocked", "blocked")
+		}
+		for _, it := range a.WaitingOnOthers(ws.Principal) {
+			tag := "◆ waiting"
+			if _, who, ok := it.State(); ok && who != "" {
+				tag += " on " + who
+			}
+			add(it, tag, "waiting")
+		}
+	}
+	return out
+}
+
+// overdueLines lists every open item past its due date, whoever it waits
+// on; makeQueue puts the longest overdue first.
+func overdueLines(ws *Workspace, all bool) []queueLine {
+	var out []queueLine
+	for _, a := range ws.Agents {
+		for _, it := range a.Open {
+			if !it.Overdue(ws.Scanned) {
+				continue
+			}
+			wi := makeWebItem(ws, a, it, all)
+			out = append(out, queueLine{Agent: a.Name, AgentHref: link(all, "w", ws.Name, a.Name), Item: &wi, Overdue: true})
+		}
+	}
+	return out
+}
+
 // queueView is a ranked queue split for the page: the first Top shown, the
-// rest folded.
+// rest folded; a card with its Title, colour (Class) and Empty line.
 type queueView struct {
-	Top, More []queueLine
-	Total     int
+	Top, More           []queueLine
+	Total               int
+	Title, Class, Empty string
+	Key                 string
 }
 
 func makeQueue(lines []queueLine, top int) *queueView {
