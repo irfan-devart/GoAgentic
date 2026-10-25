@@ -207,11 +207,13 @@ type webAgent struct {
 	OpenCounts  map[string]int
 	Parked      []webItem
 	LastSession *Session
-	// Chat is the latest session as a conversation; ChatLive says it is
-	// still running in a pane.
-	Chat     []webChat
-	ChatLive bool
-	ChatNote string
+	// Chat is the running session as a conversation, read only while
+	// ChatLive (the agent is running in a pane). A stopped agent shows no
+	// chat, only when its last session ended (LastEnded).
+	Chat      []webChat
+	ChatLive  bool
+	ChatNote  string
+	LastEnded time.Time
 	// CanSend: the agent's own session is running in a pane, so the page
 	// offers a send box posting to SendURL. SendNote says why not.
 	CanSend  bool
@@ -419,6 +421,8 @@ func (s *webServer) agent(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	switch {
+	case !wa.ChatLive:
+		wa.LastEnded = a.LastActive
 	case a.Transcript == "" && harnessOf(ws, a) != "claude":
 		wa.ChatNote = a.Name + " runs in " + harnessOf(ws, a) + "; the chat shows Claude Code sessions only."
 	case a.Transcript == "":

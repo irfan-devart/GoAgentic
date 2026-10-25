@@ -192,21 +192,22 @@ main.addEventListener("keydown", e => {
 {{else}}<h3 class="ok">Health ✓ <span class="dim">{{.HealthLine}}</span></h3>{{end}}</section>
 </div>
 <aside class="chat-pane">
-<h3>Session {{if .ChatLive}}<span class="ok">● live</span>{{else}}<span class="dim">— latest, not running</span>{{end}}</h3>
-<div class="chat" id="chat">
+<h3>Session {{if .ChatLive}}<span class="ok">● live</span>{{else}}<span class="dim">— not running</span>{{end}}</h3>
+{{if .ChatLive}}<div class="chat" id="chat">
 {{if .ChatNote}}<p class="dim">{{.ChatNote}}</p>{{end}}
 {{range .Chat}}{{if eq .Kind "you"}}<div class="msg you"><div class="bubble">{{.Text}}</div><time>{{.At.Local.Format "15:04"}}</time></div>
 {{else if eq .Kind "agent"}}<div class="msg agent"><div class="bubble">{{.HTML}}</div><time>{{.At.Local.Format "15:04"}}</time></div>
 {{else}}<details class="tools" data-key="tools-{{.At.UnixNano}}"><summary>⚙ {{.Summary}}</summary><ul>{{range .Tools}}<li>{{.}}</li>{{end}}</ul></details>
 {{end}}{{end}}
 </div>
-{{if .CanSend}}<form class="answer send" method="post" action="{{.SendURL}}">
+{{else}}<p class="ended"><strong>Not running</strong>{{if not .LastEnded.IsZero}} · last session ended {{.LastEnded.Local.Format "Mon 15:04"}}{{end}}{{with .SessionHref}} (<a href="{{.}}">log →</a>){{end}}</p>
+{{end}}{{if .CanSend}}<form class="answer send" method="post" action="{{.SendURL}}">
   <textarea name="text" rows="2" maxlength="4000" placeholder="Message {{.Name}}" aria-label="Message {{.Name}}"></textarea>
   <div class="row"><button type="submit">Send</button> <span class="dim hint">⌘/Ctrl-Enter · typed into its pane</span> <span class="status"></span></div>
 </form>{{else if .CanStart}}<form class="answer start" method="post" action="{{.StartURL}}">
-  <div class="row"><button type="submit">Start {{.Name}}</button> <span class="dim hint">{{.SendNote}} Opens it in a new Herdr tab ({{.Harness}}) and runs its start; your view stays put.</span> <span class="status"></span></div>
+  <div class="row"><button type="submit">Start {{.Name}}</button> <span class="dim hint">Opens it in a new Herdr tab ({{.Harness}}) and runs its start; your view stays put.</span> <span class="status"></span></div>
 </form>{{else}}<p class="dim send-note">{{.SendNote}}</p>{{end}}
-<p class="dim chat-foot">Read from the Claude Code transcript; thinking and tool output are left out.</p>
+{{if .ChatLive}}<p class="dim chat-foot">Read from the Claude Code transcript; thinking and tool output are left out.</p>{{end}}
 </aside></div>
 {{end}}
 {{end}}

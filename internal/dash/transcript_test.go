@@ -82,20 +82,20 @@ func TestChatMarkdownEscapes(t *testing.T) {
 
 func TestWebAgentPageShowsTheSession(t *testing.T) {
 	parent := webFleet(t)
-	path := filepath.Join(t.TempDir(), "s.jsonl")
-	write(t, path, transcriptFixture)
 	root := filepath.Join(parent, "alpha")
-	opts := func(bool) Options { return Options{Now: now} }
-	h := NewWebHandler(WebSource{FleetRoot: parent, Options: opts})
+	pane := func() ([]LivePane, error) {
+		return []LivePane{{Name: "sigrid", PaneID: "w1:p7", CWD: root, Agent: "claude", Status: "idle", Running: true}}, nil
+	}
+	h := NewWebHandler(WebSource{FleetRoot: parent, Options: func(bool) Options { return Options{Now: now, Herdr: pane} }})
 	_, body := get(t, h, "/w/alpha/Sigrid")
 	if !strings.Contains(body, "No Claude Code session of Sigrid found") {
-		t.Error("without a transcript the page must say so")
+		t.Error("live without a transcript: the page must say so")
 	}
 
 	// Point the scan at a transcripts directory holding the fixture.
 	tr := t.TempDir()
 	write(t, filepath.Join(tr, projectDirName(root), "s.jsonl"), transcriptFixture)
-	h = NewWebHandler(WebSource{FleetRoot: parent, Options: func(bool) Options { return Options{Now: now, Transcripts: tr} }})
+	h = NewWebHandler(WebSource{FleetRoot: parent, Options: func(bool) Options { return Options{Now: now, Transcripts: tr, Herdr: pane} }})
 	_, body = get(t, h, "/w/alpha/Sigrid")
 	for _, want := range []string{`class="msg you"`, "Go with #3 &lt;b&gt;now&lt;/b&gt;", "<strong>#3</strong>", "⚙ Bash · Read"} {
 		if !strings.Contains(body, want) {
@@ -104,5 +104,17 @@ func TestWebAgentPageShowsTheSession(t *testing.T) {
 	}
 	if strings.Contains(body, "secret reasoning") || strings.Contains(body, "Sun Oct 25 tool output") || strings.Contains(body, "subagent prompt") {
 		t.Error("thinking, tool output and sidechains must stay out")
+	}
+
+	// Stopped: no chat history, only when the last session ended and its log.
+	h = NewWebHandler(WebSource{FleetRoot: parent, Options: func(bool) Options { return Options{Now: now, Transcripts: tr} }})
+	_, body = get(t, h, "/w/alpha/Sigrid")
+	if strings.Contains(body, `class="msg`) || strings.Contains(body, `id="chat"`) {
+		t.Error("a stopped agent must show no chat history")
+	}
+	for _, want := range []string{"<strong>Not running</strong> · last session ended", "log →", "— not running"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("stopped agent page lacks %q", want)
+		}
 	}
 }

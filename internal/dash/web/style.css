@@ -116,3 +116,4 @@ details.tools li { word-break: break-all; }
 .chat-foot { font-size: 12px; margin: 4px 0 0; }
 form.send { max-width: none; }
 .send-note { font-size: 13px; margin: 8px 0 0; }
+.ended { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--hover); margin: 0 0 4px; }

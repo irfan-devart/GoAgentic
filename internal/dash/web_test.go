@@ -378,7 +378,7 @@ func TestWebSendTypesIntoTheLivePane(t *testing.T) {
 
 	// Not running: no box, and the page says so instead of starting it.
 	_, body = get(t, NewWebHandler(WebSource{FleetRoot: parent, Options: webOptions}), "/w/alpha/Sigrid")
-	if strings.Contains(body, "/send") || !strings.Contains(body, "Sigrid is not running.") {
+	if strings.Contains(body, "/send") || !strings.Contains(body, "<strong>Not running</strong>") {
 		t.Errorf("a stopped agent's page must say it is not running, with no send box:\n%s", body)
 	}
 	// A failed prompt is reported, not swallowed.
@@ -484,7 +484,7 @@ func TestLaunchInBackgroundLeavesTheViewAlone(t *testing.T) {
 func TestWebChatNoteNamesAnotherHarness(t *testing.T) {
 	parent := webFleet(t)
 	write(t, filepath.Join(parent, "alpha/agents/CONVENTIONS.md"), "---\nprincipal: Norman Noble\nharness: codex\n---\n")
-	_, body := get(t, NewWebHandler(WebSource{FleetRoot: parent, Options: webOptions}), "/w/alpha/Sigrid")
+	_, body := get(t, NewWebHandler(WebSource{FleetRoot: parent, Options: livePanes(parent, "sigrid", "Sigrid - Lead", "idle")}), "/w/alpha/Sigrid")
 	if !strings.Contains(body, "Sigrid runs in codex; the chat shows Claude Code sessions only.") {
 		t.Errorf("chat note for a codex agent:\n%s", body)
 	}
