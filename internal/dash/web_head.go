@@ -1,6 +1,7 @@
 package dash
 
 import (
+	"fmt"
 	"hash/fnv"
 	"html/template"
 	"time"
@@ -13,6 +14,54 @@ type webFact struct {
 	Label, Value, Hint string
 	// Mark is a small logo before the value: the harness's maker.
 	Mark template.HTML
+	// Fill is a meter under the value, 0–100, when Meter; Tone colours it.
+	Meter bool
+	Fill  int
+	Tone  string
+}
+
+// withUsage puts the running session's model in place of the configured
+// one, and adds how full its context window is.
+func withUsage(facts []webFact, u *sessionUsage) []webFact {
+	if u == nil {
+		return facts
+	}
+	if u.Model != "" {
+		model := webFact{Label: "Model", Value: modelName(u.Model), Hint: u.Model}
+		if u.Effort != "" {
+			model.Value += " · " + u.Effort
+			model.Hint += ", " + u.Effort + " reasoning"
+		}
+		at := 1
+		for i, f := range facts {
+			if f.Label == "Model" {
+				facts = append(facts[:i], facts[i+1:]...)
+				break
+			}
+		}
+		facts = append(facts[:at], append([]webFact{model}, facts[at:]...)...)
+	}
+	if u.Used > 0 {
+		ctx := webFact{Label: "Context", Value: tokens(u.Used), Hint: fmt.Sprintf("%d tokens in context at the last reply", u.Used)}
+		if u.Window > 0 {
+			pct := u.Used * 100 / u.Window
+			ctx.Value = fmt.Sprintf("%s of %s · %d%%", tokens(u.Used), tokens(u.Window), pct)
+			ctx.Hint += fmt.Sprintf(", of a %d-token window", u.Window)
+			ctx.Meter, ctx.Fill, ctx.Tone = true, min(pct, 100), "ok"
+			switch {
+			case pct >= 80:
+				ctx.Tone = "blocked"
+			case pct >= 50:
+				ctx.Tone = "waiting"
+			}
+		}
+		at := 2
+		if at > len(facts) {
+			at = len(facts)
+		}
+		facts = append(facts[:at], append([]webFact{ctx}, facts[at:]...)...)
+	}
+	return facts
 }
 
 // webFacts are detailFacts for the page: short values, with the detail

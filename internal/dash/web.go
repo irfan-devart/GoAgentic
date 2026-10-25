@@ -230,6 +230,8 @@ type agentRow struct {
 type webAgent struct {
 	Name, Title string
 	Facts       []webFact
+	// Usage is the running session's model and context use.
+	Usage *sessionUsage
 	// Initial and Hue make the header's tile.
 	Initial string
 	Hue     int
@@ -478,6 +480,7 @@ func (s *webServer) agent(w http.ResponseWriter, r *http.Request) {
 	}
 	s.applyLaunch(ws, a, wa)
 	s.applyClose(ws, a, wa)
+	wa.Facts = withUsage(wa.Facts, wa.Usage)
 	if last, ok := a.LastSession(); ok {
 		wa.LastSession = &last
 		wa.SessionHref = fileLink(ws, a, filepath.Join("memory", "sessions", last.File), all)
@@ -654,6 +657,9 @@ func (s *webServer) readChat(ws *Workspace, a *Agent, wa *webAgent) {
 		return
 	}
 	wa.readable = true
+	if path != "" {
+		wa.Usage = readUsage(path)
+	}
 	if path == "" || !fileExists(path) {
 		wa.Loading, wa.LoadingText = true, "Starting "+a.Name+"…"
 		if settled(a.Live) && s.launchedAt(ws, a).IsZero() {

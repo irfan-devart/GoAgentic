@@ -295,7 +295,7 @@ main.addEventListener("keydown", e => {
   {{if and .CloseURL (not .WrapStopped) (not .Wrapping)}}<form class="answer close" method="post" action="{{.CloseURL}}">
     <span class="status{{if .CloseError}} error{{end}}">{{.CloseError}}</span> <button type="submit" class="quiet"{{if .Busy}} disabled title="{{.Name}} is busy — wrap when it has finished"{{else}} title="Runs its wrap, then closes the pane"{{end}}>Wrap &amp; close</button>
   </form>{{end}}
-  <dl class="head-facts">{{range .Facts}}<div{{with .Hint}} title="{{.}}"{{end}}><dt>{{.Label}}</dt><dd>{{.Mark}}{{.Value}}</dd></div>{{end}}</dl>
+  <dl class="head-facts">{{range .Facts}}<div{{with .Hint}} title="{{.}}"{{end}}><dt>{{.Label}}</dt><dd>{{.Mark}}{{.Value}}</dd>{{if .Meter}}<span class="meter {{.Tone}}"><span style="width: {{.Fill}}%"></span></span>{{end}}</div>{{end}}</dl>
 </header>
 <div class="agent-split">
 <div class="info" data-scroll="info">{{template "tracker" .}}</div>

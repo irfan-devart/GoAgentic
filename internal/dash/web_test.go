@@ -970,3 +970,47 @@ func TestHeaderShowsTheHarnessMaker(t *testing.T) {
 		t.Error("the header still shows the pane")
 	}
 }
+
+func TestReadUsage(t *testing.T) {
+	dir := t.TempDir()
+	claude := filepath.Join(dir, "s.jsonl")
+	write(t, claude, `{"type":"assistant","message":{"model":"claude-opus-5-5","usage":{"input_tokens":2,"cache_creation_input_tokens":900,"cache_read_input_tokens":100000}}}
+{"type":"user","message":{"content":"next"}}
+{"type":"assistant","message":{"model":"claude-opus-5-5","usage":{"input_tokens":3,"cache_creation_input_tokens":1000,"cache_read_input_tokens":269706}}}
+{"type":"assistant","message":{"model":"<synthetic>","usage":{"input_tokens":0}}}
+`)
+	if u := readUsage(claude); u == nil || u.Model != "claude-opus-5-5" || u.Used != 270709 || u.Window != 1_000_000 {
+		t.Errorf("claude usage = %+v", u)
+	}
+	codex := filepath.Join(dir, "rollout-x.jsonl")
+	write(t, codex, `{"type":"turn_context","payload":{"model":"gpt-6.1-sol","effort":"medium"}}
+{"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"total_tokens":74762},"model_context_window":475000}}}
+`)
+	if u := readUsage(codex); u == nil || u.Model != "gpt-6.1-sol" || u.Effort != "medium" || u.Used != 74762 || u.Window != 475000 {
+		t.Errorf("codex usage = %+v", u)
+	}
+	facts := withUsage([]webFact{{Label: "Harness"}, {Label: "Started"}}, readUsage(codex))
+	var got []string
+	for _, f := range facts {
+		got = append(got, f.Label+"="+f.Value)
+	}
+	if strings.Join(got, "|") != "Harness=|Model=gpt-6.1-sol · medium|Context=75k of 475k · 15%|Started=" {
+		t.Errorf("facts = %q", got)
+	}
+}
+
+func TestModelNames(t *testing.T) {
+	for id, want := range map[string]string{
+		"claude-opus-5-5": "Opus 5.5", "claude-opus-5-5[1m]": "Opus 5.5", "claude-sonnet-4-6": "Sonnet 4.6",
+		"claude-haiku-4-5-20251001": "Haiku 4.5", "claude-sonnet-5": "Sonnet 5", "gpt-6.1-sol": "gpt-6.1-sol",
+	} {
+		if got := modelName(id); got != want {
+			t.Errorf("modelName(%s) = %q, want %q", id, got, want)
+		}
+	}
+	for id, want := range map[string]int{"claude-opus-5-5": 1_000_000, "claude-haiku-5-5": 1_000_000, "claude-sonnet-4-6": 200_000, "claude-opus-4-8[1m]": 1_000_000, "gpt-6.1-sol": 0} {
+		if got := claudeWindow(id); got != want {
+			t.Errorf("claudeWindow(%s) = %d, want %d", id, got, want)
+		}
+	}
+}
