@@ -139,6 +139,8 @@ form.send { max-width: none; }
 .acard .last { margin: 6px 0 0; font-size: 13px; color: var(--dim); overflow-wrap: anywhere; }
 .acard .next { margin: 6px 0 0; font-size: 13px; overflow-wrap: anywhere; }
 .state { font-size: 13px; }
+.activity { color: var(--waiting); font-weight: 600; }
+.chat .msg.working { display: block; margin: 0; font-size: 13px; }
 ul.items.queue > li { border-bottom: 1px solid var(--line); padding: 5px 0; }
 ul.items.queue .who { min-width: 90px; }
 .more-queue > summary { cursor: pointer; padding: 6px 0; }

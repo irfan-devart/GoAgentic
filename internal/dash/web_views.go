@@ -19,6 +19,8 @@ type nowLine struct {
 	// colours it.
 	State, Class string
 	Working      bool
+	// Activity is the harness's own status line while it works.
+	Activity *activity
 	// Last is the start of the agent's last message, when its chat can be
 	// read.
 	Last string
@@ -40,6 +42,7 @@ func (s *webServer) nowLines(ws *Workspace, all bool) []nowLine {
 			l.State, l.Class = "your turn", "foryou"
 		case a.Live.Status == "working":
 			l.State, l.Class, l.Working = "working", "ok", true
+			l.Activity = s.activityOf(a)
 		default:
 			l.State, l.Class = a.Live.State(), "dim"
 		}

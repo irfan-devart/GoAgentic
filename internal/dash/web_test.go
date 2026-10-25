@@ -839,3 +839,33 @@ func TestWebSidebarReorder(t *testing.T) {
 		}
 	}
 }
+
+func TestParseActivity(t *testing.T) {
+	for text, want := range map[string]string{
+		"⏺ Done.\n\n✻ Deliberating… (26s · ↓ 482 tokens)\n\n───\n❯\n───\n  footer": "Deliberating…|26s · ↓ 482 tokens",
+		"✶ Percolating… (1m 3s · ↑ 2.1k tokens · esc to interrupt)\n":              "Percolating…|1m 3s · ↑ 2.1k tokens",
+		"✳ Clauding…\n": "Clauding…|",
+		"• Working (12s • esc to interrupt)\n› \n": "Working|12s",
+		"• Done, pushed.\n✻ Brewed for 2m 3s\n":    "",
+		"plain output\n": "",
+	} {
+		got := ""
+		if a := parseActivity(text); a != nil {
+			got = a.Word + "|" + a.Meta
+		}
+		if got != want {
+			t.Errorf("parseActivity(%q) = %q, want %q", text, got, want)
+		}
+	}
+}
+
+func TestWebShowsTheHarnessStatusLine(t *testing.T) {
+	parent := webFleet(t)
+	h := NewWebHandler(WebSource{FleetRoot: parent, Options: livePanes(parent, "sigrid", "Sigrid - Lead", "working"),
+		ReadPane: func(string) (string, error) { return "✻ Percolating… (26s · ↓ 482 tokens)\n❯\n", nil }})
+	for _, path := range []string{"/w/alpha", "/w/alpha/Sigrid"} {
+		if _, body := get(t, h, path); !strings.Contains(body, `<span class="activity">Percolating…</span> <span class="dim">26s · ↓ 482 tokens</span>`) {
+			t.Errorf("%s lacks the status line", path)
+		}
+	}
+}

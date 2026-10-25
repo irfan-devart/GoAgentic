@@ -54,6 +54,8 @@ type WebSource struct {
 	// OrderFile keeps the sidebar's order; "" means dash-order.json in the
 	// user's config folder (web_order.go).
 	OrderFile string
+	// ReadPane is a pane's last lines; nil means `herdr pane read`.
+	ReadPane func(pane string) (string, error)
 	// Launch starts a stopped agent; nil means LaunchInBackground.
 	Launch func(ws *Workspace, a *Agent) (string, error)
 }
@@ -227,16 +229,18 @@ type webAgent struct {
 	// chat; otherwise with the tracker. State says what the session does.
 	Active            bool
 	State, StateClass string
-	Plan              []PlanStep
-	Mine              []webItem
-	Answered          []webItem
-	Inbox             int
-	Others            []webItem
-	Blocked           []webItem
-	Open              []webItem
-	OpenCounts        map[string]int
-	Parked            []webItem
-	LastSession       *Session
+	// Activity is the harness's own status line while it works.
+	Activity    *activity
+	Plan        []PlanStep
+	Mine        []webItem
+	Answered    []webItem
+	Inbox       int
+	Others      []webItem
+	Blocked     []webItem
+	Open        []webItem
+	OpenCounts  map[string]int
+	Parked      []webItem
+	LastSession *Session
 	// Chat is the running session as a conversation, read only while
 	// ChatLive (the agent is running in a pane). A stopped agent shows no
 	// chat, only when its last session ended (LastEnded).
@@ -477,6 +481,9 @@ func (s *webServer) agent(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	wa.State, wa.StateClass = agentState(a, wa)
+	if wa.State == "working" || wa.State == "starting" {
+		wa.Activity = s.activityOf(a)
+	}
 	// No count header: the workspace's counts are not this agent's.
 	s.render(w, r, page{
 		Title: a.Name + " · " + ws.Name,

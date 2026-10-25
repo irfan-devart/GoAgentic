@@ -165,7 +165,9 @@ main.addEventListener("keydown", e => {
 </header>
 {{end}}
 
-{{define "state"}}<span class="state {{.Class}}">{{if .Working}}<span class="spin" aria-hidden="true">⠋</span> {{end}}{{.State}}</span>{{end}}
+{{define "state"}}<span class="state {{.Class}}">{{if .Working}}<span class="spin" aria-hidden="true">⠋</span> {{end}}{{with .Activity}}{{template "activity" .}}{{else}}{{.State}}{{end}}</span>{{end}}
+
+{{define "activity"}}<span class="activity">{{.Word}}</span>{{with .Meta}} <span class="dim">{{.}}</span>{{end}}{{end}}
 
 {{define "navlink"}}<li data-name="{{.Name}}"><a class="{{if .Current}}current{{else if .Selected}}selected{{end}}{{if .Bold}} bold{{end}}" href="{{.Href}}"{{if .State}} title="{{.State}}"{{end}}><span class="dot {{if .Dot}}{{.Dot}}{{else}}off{{end}}"></span><span class="nm">{{.Name}}{{with .Sub}}<small>{{.}}</small>{{end}}</span>{{if .Badge}}<span class="badge" title="{{.Badge}} waiting on you">{{.Badge}}</span>{{end}}</a></li>{{end}}
 
@@ -224,7 +226,7 @@ main.addEventListener("keydown", e => {
 {{with .Agent}}
 <header class="agent-head">
 <h1 class="agent-name">{{.Name}}{{if .Title}} <span class="dim">— {{.Title}}</span>{{end}}</h1>
-<span class="state {{.StateClass}}">{{if or (eq .State "working") (eq .State "starting") (eq .State "wrapping up")}}<span class="spin" aria-hidden="true">⠋</span> {{end}}{{.State}}</span>
+<span class="state {{.StateClass}}">{{if or (eq .State "working") (eq .State "starting") (eq .State "wrapping up")}}<span class="spin" aria-hidden="true">⠋</span> {{end}}{{with .Activity}}{{template "activity" .}}{{else}}{{.State}}{{end}}</span>
 {{if and .CloseURL (not .WrapStopped) (not .Wrapping)}}<form class="answer close" method="post" action="{{.CloseURL}}">
   <span class="status{{if .CloseError}} error{{end}}">{{.CloseError}}</span> <button type="submit" class="quiet"{{if .Busy}} disabled title="{{.Name}} is busy — wrap when it has finished"{{else}} title="Runs its wrap, then closes the pane"{{end}}>Wrap &amp; close</button>
 </form>{{end}}
@@ -261,7 +263,7 @@ main.addEventListener("keydown", e => {
 {{define "plan"}}{{if .}}<ol class="plan-steps">{{range .}}<li>{{if .Priority}}<span class="pri">{{.Priority}}</span> {{end}}{{.Text}}</li>{{end}}</ol>{{else}}<p class="dim none">None</p>{{end}}{{end}}
 
 {{define "session"}}
-{{if .Loading}}<div class="loading" role="status"><span class="spin" aria-hidden="true">⠋</span> <strong>{{.LoadingText}}</strong>
+{{if .Loading}}<div class="loading" role="status"><span class="spin" aria-hidden="true">⠋</span> <strong>{{.LoadingText}}</strong>{{with .Activity}} {{template "activity" .}}{{end}}
 <p class="dim">Opening its pane and loading its context. The conversation starts here once {{.Name}} is ready.</p></div>
 {{else if .Prompt}}<p class="ended"><strong>{{.Name}} is waiting on a prompt in its pane</strong> (a folder-trust question, say). Answer it there; the conversation starts here after.</p>
 {{else if .ChatLive}}{{if .Wrapping}}<div class="loading wrapping" role="status"><span class="spin" aria-hidden="true">⠋</span> <strong>Wrapping up {{.Name}}…</strong> <span class="dim">It records the session, then its pane closes.</span></div>
@@ -272,6 +274,7 @@ main.addEventListener("keydown", e => {
 {{else if eq .Kind "agent"}}<div class="msg agent"><div class="bubble">{{.HTML}}</div><time>{{.At.Local.Format "15:04"}}</time></div>
 {{else}}<details class="tools" data-key="tools-{{.At.UnixNano}}"><summary>⚙ {{.Summary}}</summary><ul>{{range .Tools}}<li>{{.}}</li>{{end}}</ul></details>
 {{end}}{{end}}
+{{with .Activity}}<p class="msg working" role="status"><span class="spin" aria-hidden="true">⠋</span> {{template "activity" .}}</p>{{end}}
 </div>
 {{else}}<p class="ended"><strong>Not running</strong>{{if not .LastEnded.IsZero}} · last session ended {{.LastEnded.Local.Format "Mon 15:04"}}{{end}}{{with .SessionHref}} (<a href="{{.}}">log →</a>){{end}}</p>
 {{end}}{{if or .Loading .Prompt .Wrapping}}{{else if .CanSend}}<div class="composer"><form class="answer send" method="post" action="{{.SendURL}}">
