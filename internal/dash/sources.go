@@ -28,6 +28,20 @@ type LivePane struct {
 	Label string `json:"-"`
 	// Running is true when a coding-agent CLI is live in the pane.
 	Running bool `json:"-"`
+	// Session is the CLI session Herdr sees in the pane; for Claude Code
+	// its value is the transcript's file name.
+	Session *struct {
+		Agent string `json:"agent"`
+		Value string `json:"value"`
+	} `json:"agent_session,omitempty"`
+}
+
+// ClaudeSession is the Claude Code session id of the pane, or "".
+func (p *LivePane) ClaudeSession() string {
+	if p.Session == nil || p.Session.Agent != "claude" {
+		return ""
+	}
+	return p.Session.Value
 }
 
 // State is the short Live cell: "working", "idle", "blocked", or "shell"

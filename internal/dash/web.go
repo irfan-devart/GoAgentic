@@ -88,15 +88,27 @@ type webServer struct {
 	// auto-refreshing tab or two must not pile them up.
 	mu   sync.Mutex
 	chat *ChatCache
-	// starting holds the agents (ws/agent) a Start is opening, so a second
-	// click or tab does not open a second session.
+	// launches holds the agents (ws/agent) a Start opened and that are not
+	// yet ready, so the page shows them loading and a second click or tab
+	// does not open a second session.
 	startMu  sync.Mutex
-	starting map[string]bool
+	launches map[string]*launchState
 }
+
+// launchState is one Start: running until done, then loading until the
+// agent has finished its start-up turn; err when it failed.
+type launchState struct {
+	at, doneAt time.Time
+	done       bool
+	err        string
+}
+
+// launchGiveUp is how long a Start stays shown as loading or failed.
+const launchGiveUp = 10 * time.Minute
 
 // NewWebHandler returns the dashboard's routes.
 func NewWebHandler(src WebSource) http.Handler {
-	s := &webServer{src: src, chat: NewChatCache(), starting: map[string]bool{}}
+	s := &webServer{src: src, chat: NewChatCache(), launches: map[string]*launchState{}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.home)
 	mux.HandleFunc("GET /w/{ws}", s.workspace)
@@ -221,9 +233,16 @@ type webAgent struct {
 	SendNote string
 	// CanStart: the agent is not running, so the page offers a Start
 	// button posting to StartURL; Harness is what it starts in.
-	CanStart    bool
-	StartURL    string
-	Harness     string
+	CanStart bool
+	StartURL string
+	Harness  string
+	// Loading: a session is starting and has not finished its start-up
+	// turn; the page shows LoadingText with a spinner instead of the chat.
+	// Prompt says it stopped at a prompt in its pane instead.
+	Loading     bool
+	LoadingText string
+	Prompt      bool
+	StartError  string
 	SessionHref string
 	Health      Health
 	HealthLine  string
@@ -411,38 +430,18 @@ func (s *webServer) agent(w http.ResponseWriter, r *http.Request) {
 	if wa.CanSend, wa.SendNote = canSend(a); wa.CanSend {
 		wa.SendURL = "/w/" + ws.Name + "/" + a.Name + "/send"
 	}
-	if a.Live == nil || !a.Live.Running {
+	if !wa.ChatLive {
 		wa.Harness = harnessOf(ws, a)
 		if ok, why := HarnessAvailable(ws, wa.Harness); ok {
 			wa.CanStart, wa.StartURL = true, "/w/"+ws.Name+"/"+a.Name+"/start"
-			wa.SendNote = a.Name + " is not running."
 		} else {
 			wa.SendNote = a.Name + " is not running, and cannot start in " + wa.Harness + ": " + why + "."
 		}
-	}
-	switch {
-	case !wa.ChatLive:
 		wa.LastEnded = a.LastActive
-	case a.Transcript == "" && harnessOf(ws, a) != "claude":
-		wa.ChatNote = a.Name + " runs in " + harnessOf(ws, a) + "; the chat shows Claude Code sessions only."
-	case a.Transcript == "":
-		wa.ChatNote = "No Claude Code session of " + a.Name + " found in this workspace's transcripts."
-	default:
-		entries, err := s.chat.Chat(a.Transcript, a.Name)
-		if err != nil {
-			wa.ChatNote = "Could not read the session: " + err.Error()
-		}
-		for _, e := range entries {
-			wc := webChat{ChatEntry: e}
-			switch e.Kind {
-			case "agent":
-				wc.HTML = chatMarkdown(e.Text)
-			case "tools":
-				wc.Summary = ToolSummary(e.Tools)
-			}
-			wa.Chat = append(wa.Chat, wc)
-		}
+	} else {
+		s.readChat(ws, a, wa)
 	}
+	s.applyLaunch(ws, a, wa)
 	if last, ok := a.LastSession(); ok {
 		wa.LastSession = &last
 		wa.SessionHref = fileLink(ws, a, filepath.Join("memory", "sessions", last.File), all)
@@ -545,6 +544,88 @@ func (s *webServer) send(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// readChat fills the chat from the session running in the agent's pane:
+// for Claude Code the transcript Herdr names, so an earlier session never
+// shows as this one. A session still on its start-up turn shows loading.
+func (s *webServer) readChat(ws *Workspace, a *Agent, wa *webAgent) {
+	path := a.Transcript
+	if id := a.Live.ClaudeSession(); id != "" {
+		dir := filepath.Dir(a.Transcript)
+		if a.Transcript == "" {
+			dir = filepath.Join(s.src.Options(true).Transcripts, projectDirName(ws.Root))
+		}
+		path = filepath.Join(dir, id+".jsonl")
+		if !fileExists(path) {
+			wa.Loading, wa.LoadingText = true, "Starting "+a.Name+"…"
+			return
+		}
+	} else if a.Live.Agent != "claude" {
+		wa.ChatNote = a.Name + " runs in " + a.Live.Agent + "; the chat shows Claude Code sessions only."
+		return
+	}
+	if path == "" {
+		wa.ChatNote = "No Claude Code session of " + a.Name + " found in this workspace's transcripts."
+		return
+	}
+	entries, err := s.chat.Chat(path, a.Name)
+	if err != nil {
+		wa.ChatNote = "Could not read the session: " + err.Error()
+	}
+	replied := false
+	for _, e := range entries {
+		wc := webChat{ChatEntry: e}
+		switch e.Kind {
+		case "agent":
+			wc.HTML = chatMarkdown(e.Text)
+			replied = true
+		case "tools":
+			wc.Summary = ToolSummary(e.Tools)
+		}
+		wa.Chat = append(wa.Chat, wc)
+	}
+	// Started with /agents:start and no reply yet: still loading.
+	if !replied && len(entries) > 0 && strings.HasPrefix(entries[0].Text, "/agents:start") && !settled(a.Live) {
+		wa.Loading, wa.LoadingText = true, "Starting "+a.Name+"…"
+	}
+}
+
+// applyLaunch shows a Start in progress: loading until the agent is up and
+// idle after its start-up turn (for Claude, until it has replied), the
+// prompt it stopped at, or why it failed.
+func (s *webServer) applyLaunch(ws *Workspace, a *Agent, wa *webAgent) {
+	live := a.Live != nil && a.Live.Running
+	key := ws.Name + "/" + a.Name
+	s.startMu.Lock()
+	defer s.startMu.Unlock()
+	st := s.launches[key]
+	if st == nil || time.Since(st.at) > launchGiveUp {
+		delete(s.launches, key)
+		if wa.Loading && a.Live.Status == "blocked" {
+			wa.Loading, wa.Prompt = false, true
+		}
+		return
+	}
+	switch {
+	case st.err != "":
+		wa.StartError = st.err
+		return
+	case live && a.Live.Status == "blocked":
+		wa.Loading, wa.Prompt = false, true
+		return
+	case !st.done || !live:
+		wa.Loading, wa.LoadingText = true, "Starting "+a.Name+"…"
+	case a.Live.ClaudeSession() == "" && (!settled(a.Live) || time.Since(st.doneAt) < 5*time.Second):
+		// No transcript to watch: wait for the pane to settle.
+		wa.Loading, wa.LoadingText = true, "Starting "+a.Name+"…"
+	}
+	if !wa.Loading && live {
+		delete(s.launches, key)
+	}
+}
+
+// settled: the CLI has finished its turn and waits for input.
+func settled(p *LivePane) bool { return p.Status == "idle" || p.Status == "done" }
+
 // start opens a stopped agent in Herdr: a new tab in its workspace's Space
 // (or its leftover shell pane), running its start command, without moving
 // the principal's view. The agent then shows as live and the send box
@@ -564,31 +645,32 @@ func (s *webServer) start(w http.ResponseWriter, r *http.Request) {
 	}
 	key := ws.Name + "/" + a.Name
 	s.startMu.Lock()
-	busy := s.starting[key]
-	s.starting[key] = true
-	s.startMu.Unlock()
-	if busy {
+	if st := s.launches[key]; st != nil && st.err == "" && time.Since(st.at) < launchGiveUp {
+		s.startMu.Unlock()
 		http.Error(w, a.Name+" is already starting", http.StatusConflict)
 		return
 	}
-	defer func() {
-		s.startMu.Lock()
-		delete(s.starting, key)
-		s.startMu.Unlock()
-	}()
+	st := &launchState{at: time.Now()}
+	s.launches[key] = st
+	s.startMu.Unlock()
 	launch := s.src.Launch
 	if launch == nil {
 		launch = LaunchInBackground
 	}
-	if _, err := launch(ws, a); err != nil {
-		msg := err.Error()
-		if strings.Contains(msg, "not ready") || strings.Contains(msg, "blocked") {
-			msg += ". It is waiting on a prompt in its new pane (a folder-trust question, say): answer it there."
+	// Opening a pane waits for the CLI to be ready; the page shows it
+	// loading meanwhile, so the request does not wait.
+	go func() {
+		_, err := launch(ws, a)
+		s.startMu.Lock()
+		defer s.startMu.Unlock()
+		st.done, st.doneAt = true, time.Now()
+		// Stopped at a prompt (folder trust, say): not a failure, the page
+		// shows the prompt waiting in its pane.
+		if err != nil && !strings.Contains(err.Error(), "not ready") && !strings.Contains(err.Error(), "blocked") {
+			st.err = "Start failed: " + err.Error()
 		}
-		http.Error(w, msg, http.StatusBadGateway)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
+	}()
+	w.WriteHeader(http.StatusAccepted)
 }
 
 // canSend says whether the page may type into the agent's pane: only its

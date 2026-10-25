@@ -389,74 +389,136 @@ func TestWebSendTypesIntoTheLivePane(t *testing.T) {
 	}
 }
 
-func TestWebStartOpensAStoppedAgent(t *testing.T) {
+// paneOpts serves alpha with Sigrid's pane in the given state (nil: not
+// running), reading transcripts from tr.
+func paneOpts(parent, tr string, pane **LivePane) func(bool) Options {
+	return func(bool) Options {
+		return Options{Now: now, Transcripts: tr, Herdr: func() ([]LivePane, error) {
+			if *pane == nil {
+				return nil, nil
+			}
+			p := **pane
+			p.CWD = filepath.Join(parent, "alpha")
+			return []LivePane{p}, nil
+		}}
+	}
+}
+
+func claudePane(status, session string) *LivePane {
+	p := &LivePane{Name: "sigrid", PaneID: "w1:p7", Agent: "claude", Status: status, Running: true}
+	if session != "" {
+		p.Session = &struct {
+			Agent string `json:"agent"`
+			Value string `json:"value"`
+		}{"claude", session}
+	}
+	return p
+}
+
+func TestWebStartShowsLoadingUntilReady(t *testing.T) {
 	defer func(orig func(string) (string, error)) { lookPath = orig }(lookPath)
 	lookPath = func(cli string) (string, error) { return "/bin/" + cli, nil }
 	parent := webFleet(t)
-	var started []string
-	launch := func(ws *Workspace, a *Agent) (string, error) {
-		started = append(started, ws.Name+"/"+a.Name)
-		return "started", nil
-	}
-	h := NewWebHandler(WebSource{FleetRoot: parent, Options: webOptions, Launch: launch})
+	tr := t.TempDir()
+	dir := filepath.Join(tr, projectDirName(filepath.Join(parent, "alpha")))
+	// An earlier session that must never show as the new one.
+	write(t, filepath.Join(dir, "old.jsonl"), transcriptFixture)
 
-	_, body := get(t, h, "/w/alpha/Sigrid")
-	if !strings.Contains(body, `action="/w/alpha/Sigrid/start"`) || !strings.Contains(body, "Start Sigrid") {
-		t.Fatalf("a stopped agent's page lacks Start:\n%s", body)
+	var pane *LivePane
+	release := make(chan struct{})
+	var started []string
+	h := NewWebHandler(WebSource{FleetRoot: parent, Options: paneOpts(parent, tr, &pane), Launch: func(ws *Workspace, a *Agent) (string, error) {
+		started = append(started, ws.Name+"/"+a.Name)
+		<-release
+		return "started", nil
+	}})
+	page := func() string { _, body := get(t, h, "/w/alpha/Sigrid"); return body }
+
+	body := page()
+	if !strings.Contains(body, `action="/w/alpha/Sigrid/start"`) || strings.Contains(body, `class="msg`) {
+		t.Fatalf("stopped: Start and no chat expected:\n%s", body)
 	}
-	if code, msg := post(t, h, "/w/alpha/Sigrid/start", nil, "X-GoAgentic", "1"); code != http.StatusNoContent {
+	if code, msg := post(t, h, "/w/alpha/Sigrid/start", nil, "X-GoAgentic", "1"); code != http.StatusAccepted {
 		t.Fatalf("start = %d %s", code, msg)
 	}
-	if len(started) != 1 || started[0] != "alpha/Sigrid" {
-		t.Errorf("launched = %q", started)
+	if code, _ := post(t, h, "/w/alpha/Sigrid/start", nil, "X-GoAgentic", "1"); code != http.StatusConflict {
+		t.Errorf("a second start while one is opening = %d, want 409", code)
+	}
+	loading := func(stage string) {
+		t.Helper()
+		body := page()
+		if !strings.Contains(body, `class="loading"`) || strings.Contains(body, `class="msg`) || strings.Contains(body, "/start\"") || strings.Contains(body, "/send\"") {
+			t.Errorf("%s: want the loading panel only:\n%s", stage, body)
+		}
+	}
+	loading("pane opening")
+	// The pane is up, the launch has not returned, no transcript yet.
+	pane = claudePane("working", "new")
+	loading("CLI starting")
+	close(release)
+	time.Sleep(20 * time.Millisecond)
+	loading("no transcript yet")
+	// The session has begun but not replied.
+	write(t, filepath.Join(dir, "new.jsonl"), `{"type":"user","message":{"role":"user","content":"<command-name>/agents:start</command-name>\n<command-args>sigrid</command-args>"},"timestamp":"2026-09-29T10:00:00Z"}`+"\n")
+	loading("start-up turn")
+	// It replied and is idle: the chat is the new session, not the old one.
+	f, _ := os.OpenFile(filepath.Join(dir, "new.jsonl"), os.O_APPEND|os.O_WRONLY, 0o644)
+	f.WriteString(`{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Ready. Session focus: #5."}]},"timestamp":"2026-09-29T10:01:00Z"}` + "\n")
+	f.Close()
+	pane = claudePane("done", "new") // Herdr's word for a finished turn, like idle
+	body = page()
+	if strings.Contains(body, `class="loading"`) || !strings.Contains(body, "Session focus: #5.") || strings.Contains(body, "Go with #3") || !strings.Contains(body, "/send\"") {
+		t.Errorf("ready: want the new session's chat and the send box:\n%s", body)
+	}
+	if len(started) != 1 {
+		t.Errorf("launched %d times", len(started))
+	}
+	// Ready clears the launch: once it stops again, Start works again.
+	pane = nil
+	if code, _ := post(t, h, "/w/alpha/Sigrid/start", nil, "X-GoAgentic", "1"); code != http.StatusAccepted {
+		t.Errorf("start after the agent stopped again = %d", code)
+	}
+}
+
+func TestWebStartStoppedAtAPromptOrFailed(t *testing.T) {
+	defer func(orig func(string) (string, error)) { lookPath = orig }(lookPath)
+	lookPath = func(cli string) (string, error) { return "/bin/" + cli, nil }
+	parent := webFleet(t)
+	var pane *LivePane
+	fail := errors.New("herdr agent start: agent sigrid is blocked during startup and is not ready for prompts")
+	h := NewWebHandler(WebSource{FleetRoot: parent, Options: paneOpts(parent, t.TempDir(), &pane), Launch: func(*Workspace, *Agent) (string, error) { return "", fail }})
+	post(t, h, "/w/alpha/Sigrid/start", nil, "X-GoAgentic", "1")
+	time.Sleep(20 * time.Millisecond)
+	pane = claudePane("blocked", "")
+	if _, body := get(t, h, "/w/alpha/Sigrid"); !strings.Contains(body, "waiting on a prompt in its pane") || strings.Contains(body, `class="loading"`) {
+		t.Errorf("stopped at a prompt:\n%s", body)
+	}
+
+	pane = nil
+	fail = errors.New("herdr tab create: no such workspace")
+	h = NewWebHandler(WebSource{FleetRoot: parent, Options: paneOpts(parent, t.TempDir(), &pane), Launch: func(*Workspace, *Agent) (string, error) { return "", fail }})
+	post(t, h, "/w/alpha/Sigrid/start", nil, "X-GoAgentic", "1")
+	time.Sleep(20 * time.Millisecond)
+	_, body := get(t, h, "/w/alpha/Sigrid")
+	if !strings.Contains(body, `class="status error">Start failed: herdr tab create: no such workspace`) || !strings.Contains(body, `action="/w/alpha/Sigrid/start"`) {
+		t.Errorf("failed start: error and Start again:\n%s", body)
+	}
+	if code, _ := post(t, h, "/w/alpha/Sigrid/start", nil, "X-GoAgentic", "1"); code != http.StatusAccepted {
+		t.Errorf("start again after a failure = %d", code)
+	}
+
+	// Running: no Start, and a forced post is refused; no header refused.
+	pane = claudePane("idle", "")
+	if code, _ := post(t, h, "/w/alpha/Sigrid/start", nil, "X-GoAgentic", "1"); code != http.StatusConflict {
+		t.Errorf("start while running = %d", code)
 	}
 	if code, _ := post(t, h, "/w/alpha/Sigrid/start", nil); code != http.StatusForbidden {
 		t.Errorf("start without the header = %d", code)
 	}
-
-	// Running: no Start, and a forced post is refused.
-	live := NewWebHandler(WebSource{FleetRoot: parent, Options: livePanes(parent, "sigrid", "Sigrid - Lead", "idle"), Launch: launch})
-	if _, body := get(t, live, "/w/alpha/Sigrid"); strings.Contains(body, "/start") {
-		t.Error("a running agent must not offer Start")
-	}
-	if code, _ := post(t, live, "/w/alpha/Sigrid/start", nil, "X-GoAgentic", "1"); code != http.StatusConflict {
-		t.Errorf("start while running = %d", code)
-	}
-	// A leftover shell pane is not running: Start reuses it (LaunchPlan).
-	shell := NewWebHandler(WebSource{FleetRoot: parent, Options: livePanes(parent, "sigrid", "", ""), Launch: launch})
-	if code, _ := post(t, shell, "/w/alpha/Sigrid/start", nil, "X-GoAgentic", "1"); code != http.StatusNoContent {
-		t.Errorf("start from a shell pane = %d", code)
-	}
-
-	// A start that stops at a prompt says where to answer it.
-	stuck := NewWebHandler(WebSource{FleetRoot: parent, Options: webOptions, Launch: func(*Workspace, *Agent) (string, error) {
-		return "", errors.New("herdr agent start: agent sigrid is blocked during startup and is not ready for prompts")
-	}})
-	if code, msg := post(t, stuck, "/w/alpha/Sigrid/start", nil, "X-GoAgentic", "1"); code != http.StatusBadGateway || !strings.Contains(msg, "answer it there") {
-		t.Errorf("stuck start = %d %s", code, msg)
-	}
-
-	// A second click while the first is still opening is refused.
-	entered, release := make(chan struct{}), make(chan struct{})
-	slow := NewWebHandler(WebSource{FleetRoot: parent, Options: webOptions, Launch: func(*Workspace, *Agent) (string, error) {
-		close(entered)
-		<-release
-		return "started", nil
-	}})
-	done := make(chan int)
-	go func() { code, _ := post(t, slow, "/w/alpha/Sigrid/start", nil, "X-GoAgentic", "1"); done <- code }()
-	<-entered
-	if code, _ := post(t, slow, "/w/alpha/Sigrid/start", nil, "X-GoAgentic", "1"); code != http.StatusConflict {
-		t.Errorf("a second start while one is opening = %d, want 409", code)
-	}
-	close(release)
-	if code := <-done; code != http.StatusNoContent {
-		t.Errorf("first start = %d", code)
-	}
-
 	// No CLI for its harness: no Start, the page says why.
+	pane = nil
 	lookPath = func(string) (string, error) { return "", exec.ErrNotFound }
-	if _, body := get(t, h, "/w/alpha/Sigrid"); strings.Contains(body, "/start") || !strings.Contains(body, "cannot start in claude: claude not installed") {
+	if _, body := get(t, NewWebHandler(WebSource{FleetRoot: parent, Options: webOptions}), "/w/alpha/Sigrid"); strings.Contains(body, "/start\"") || !strings.Contains(body, "cannot start in claude: claude not installed") {
 		t.Errorf("no harness CLI: page must explain, not offer Start:\n%s", body)
 	}
 }
@@ -483,8 +545,8 @@ func TestLaunchInBackgroundLeavesTheViewAlone(t *testing.T) {
 
 func TestWebChatNoteNamesAnotherHarness(t *testing.T) {
 	parent := webFleet(t)
-	write(t, filepath.Join(parent, "alpha/agents/CONVENTIONS.md"), "---\nprincipal: Norman Noble\nharness: codex\n---\n")
-	_, body := get(t, NewWebHandler(WebSource{FleetRoot: parent, Options: livePanes(parent, "sigrid", "Sigrid - Lead", "idle")}), "/w/alpha/Sigrid")
+	pane := &LivePane{Name: "sigrid", PaneID: "w1:p7", Agent: "codex", Status: "idle", Running: true}
+	_, body := get(t, NewWebHandler(WebSource{FleetRoot: parent, Options: paneOpts(parent, "", &pane)}), "/w/alpha/Sigrid")
 	if !strings.Contains(body, "Sigrid runs in codex; the chat shows Claude Code sessions only.") {
 		t.Errorf("chat note for a codex agent:\n%s", body)
 	}
