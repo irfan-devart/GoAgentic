@@ -49,6 +49,8 @@ type WebSource struct {
 	Prompt func(pane, text string) error
 	// CodexHome holds codex's sessions; "" means CodexHome().
 	CodexHome string
+	// ClosePane closes a pane; nil means `herdr pane close`.
+	ClosePane func(pane string) error
 	// Launch starts a stopped agent; nil means LaunchInBackground.
 	Launch func(ws *Workspace, a *Agent) (string, error)
 }
@@ -95,6 +97,16 @@ type webServer struct {
 	// does not open a second session.
 	startMu  sync.Mutex
 	launches map[string]*launchState
+	// closes holds the agents a Wrap & close is ending (under startMu).
+	closes map[string]*closeState
+}
+
+// closeState is one Wrap & close: the wrap command was typed at at; the
+// pane closes once the wrap has written its session log and settled.
+type closeState struct {
+	at   time.Time
+	busy bool // seen working since
+	err  string
 }
 
 // launchState is one Start: running until done, then loading until the
@@ -110,7 +122,7 @@ const launchGiveUp = 10 * time.Minute
 
 // NewWebHandler returns the dashboard's routes.
 func NewWebHandler(src WebSource) http.Handler {
-	s := &webServer{src: src, chat: NewChatCache(), launches: map[string]*launchState{}}
+	s := &webServer{src: src, chat: NewChatCache(), launches: map[string]*launchState{}, closes: map[string]*closeState{}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.home)
 	mux.HandleFunc("GET /w/{ws}", s.workspace)
@@ -119,6 +131,7 @@ func NewWebHandler(src WebSource) http.Handler {
 	mux.HandleFunc("POST /w/{ws}/{agent}/answer", s.answer)
 	mux.HandleFunc("POST /w/{ws}/{agent}/send", s.send)
 	mux.HandleFunc("POST /w/{ws}/{agent}/start", s.start)
+	mux.HandleFunc("POST /w/{ws}/{agent}/close", s.close)
 	mux.HandleFunc("GET /style.css", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/css; charset=utf-8")
 		data, _ := webFiles.ReadFile("web/style.css")
@@ -245,6 +258,12 @@ type webAgent struct {
 	LoadingText string
 	Prompt      bool
 	StartError  string
+	// Wrapping: a Wrap & close is running; WrapStopped: the agent stopped
+	// without writing its session log, so the page offers Close anyway.
+	CloseURL    string
+	Wrapping    bool
+	WrapStopped bool
+	CloseError  string
 	// readable: the chat came from a session the page can read, which
 	// says when a start is done; otherwise the pane settling does.
 	readable    bool
@@ -436,17 +455,13 @@ func (s *webServer) agent(w http.ResponseWriter, r *http.Request) {
 		wa.SendURL = "/w/" + ws.Name + "/" + a.Name + "/send"
 	}
 	if !wa.ChatLive {
-		wa.Harness = harnessOf(ws, a)
-		if ok, why := HarnessAvailable(ws, wa.Harness); ok {
-			wa.CanStart, wa.StartURL = true, "/w/"+ws.Name+"/"+a.Name+"/start"
-		} else {
-			wa.SendNote = a.Name + " is not running, and cannot start in " + wa.Harness + ": " + why + "."
-		}
+		stopped(ws, a, wa)
 		wa.LastEnded = a.LastActive
 	} else {
 		s.readChat(ws, a, wa)
 	}
 	s.applyLaunch(ws, a, wa)
+	s.applyClose(ws, a, wa)
 	if last, ok := a.LastSession(); ok {
 		wa.LastSession = &last
 		wa.SessionHref = fileLink(ws, a, filepath.Join("memory", "sessions", last.File), all)
@@ -547,6 +562,16 @@ func (s *webServer) send(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// stopped offers Start for an agent that is not running, or says why not.
+func stopped(ws *Workspace, a *Agent, wa *webAgent) {
+	wa.Harness = harnessOf(ws, a)
+	if ok, why := HarnessAvailable(ws, wa.Harness); ok {
+		wa.CanStart, wa.StartURL = true, "/w/"+ws.Name+"/"+a.Name+"/start"
+	} else {
+		wa.SendNote = a.Name + " is not running, and cannot start in " + wa.Harness + ": " + why + "."
+	}
 }
 
 // readChat fills the chat from the session running in the agent's pane:
@@ -700,6 +725,135 @@ func (s *webServer) start(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 	w.WriteHeader(http.StatusAccepted)
+}
+
+// close ends the agent's session: it types the harness's wrap command into
+// the pane, and the page closes the pane once the wrap is done
+// (applyClose). With force=1 it closes the pane at once, wrapped or not.
+func (s *webServer) close(w http.ResponseWriter, r *http.Request) {
+	ws, a, ok := s.findAgent(w, r)
+	if !ok {
+		return
+	}
+	if a.Live == nil || !a.Live.Running || !sessionPane(a.Live) {
+		http.Error(w, a.Name+" has no session of yours running", http.StatusConflict)
+		return
+	}
+	key := ws.Name + "/" + a.Name
+	if r.FormValue("force") == "1" {
+		if err := s.closePane(a.Live.PaneID); err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		s.startMu.Lock()
+		delete(s.closes, key)
+		s.startMu.Unlock()
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if ok, why := canSend(a); !ok {
+		http.Error(w, why, http.StatusConflict)
+		return
+	}
+	s.startMu.Lock()
+	if st := s.closes[key]; st != nil && st.err == "" {
+		s.startMu.Unlock()
+		http.Error(w, a.Name+" is already wrapping up", http.StatusConflict)
+		return
+	}
+	s.closes[key] = &closeState{at: time.Now()}
+	s.startMu.Unlock()
+	prompt := s.src.Prompt
+	if prompt == nil {
+		prompt = herdrPrompt
+	}
+	if err := prompt(a.Live.PaneID, frameworkCommand(a.Live.Agent, "wrap")); err != nil {
+		s.startMu.Lock()
+		delete(s.closes, key)
+		s.startMu.Unlock()
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
+func (s *webServer) closePane(pane string) error {
+	if s.src.ClosePane != nil {
+		return s.src.ClosePane(pane)
+	}
+	out, err := exec.Command(herdrBin(), "pane", "close", pane).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("herdr pane close: %s", herdrError(out, err))
+	}
+	return nil
+}
+
+// applyClose follows a Wrap & close on each look at the page: the pane
+// closes once the agent has settled with a session log written since the
+// wrap was typed; settled without one (it asked something, or stopped)
+// leaves the pane open and offers Close anyway.
+func (s *webServer) applyClose(ws *Workspace, a *Agent, wa *webAgent) {
+	live := a.Live != nil && a.Live.Running
+	if live && sessionPane(a.Live) && !wa.Loading {
+		wa.CloseURL = "/w/" + ws.Name + "/" + a.Name + "/close"
+	}
+	key := ws.Name + "/" + a.Name
+	s.startMu.Lock()
+	defer s.startMu.Unlock()
+	st := s.closes[key]
+	if st == nil {
+		return
+	}
+	if !live {
+		delete(s.closes, key)
+		return
+	}
+	// A session that is wrapping up is past starting, whatever its chat shows.
+	wa.Loading = false
+	if wa.CloseURL == "" && sessionPane(a.Live) {
+		wa.CloseURL = "/w/" + ws.Name + "/" + a.Name + "/close"
+	}
+	if st.err != "" {
+		wa.CloseError = st.err
+		return
+	}
+	if !settled(a.Live) {
+		st.busy = true
+		wa.Wrapping = true
+		return
+	}
+	if wroteSessionSince(a.Dir, st.at) {
+		if err := s.closePane(a.Live.PaneID); err != nil {
+			st.err = "Close failed: " + err.Error()
+			wa.CloseError = st.err
+			return
+		}
+		delete(s.closes, key)
+		wa.ChatLive, wa.CanSend, wa.CloseURL, wa.Chat = false, false, "", nil
+		wa.LastEnded = time.Now()
+		stopped(ws, a, wa)
+		return
+	}
+	// Settled with no log: give it a moment to start, then say it stopped.
+	if !st.busy && time.Since(st.at) < 20*time.Second {
+		wa.Wrapping = true
+		return
+	}
+	wa.WrapStopped = true
+}
+
+// wroteSessionSince says whether a session log (or a task log) in the
+// agent's folder changed after t: the wrap's step 4.
+func wroteSessionSince(dir string, t time.Time) bool {
+	for _, sub := range []string{"sessions", "tasks"} {
+		entries, _ := os.ReadDir(filepath.Join(dir, "memory", sub))
+		for _, e := range entries {
+			if info, err := e.Info(); err == nil && info.ModTime().After(t) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // canSend says whether the page may type into the agent's pane: only its

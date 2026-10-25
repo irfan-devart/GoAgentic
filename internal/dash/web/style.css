@@ -88,6 +88,9 @@ form.answer textarea { width: 100%; font: inherit; color: var(--fg); background:
 form.answer textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 form.answer .row { display: flex; gap: 10px; align-items: center; margin-top: 4px; flex-wrap: wrap; }
 form.answer button { font: inherit; padding: 4px 12px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; }
+form.answer button.quiet { background: transparent; color: var(--accent); }
+form.answer button.danger { background: var(--blocked); border-color: var(--blocked); }
+.loading.wrapping { margin-bottom: 8px; }
 form.answer button:disabled { opacity: .5; cursor: default; }
 form.answer .status { color: var(--dim); font-size: 13px; }
 form.answer .status.error { color: var(--blocked); }

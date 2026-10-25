@@ -631,3 +631,68 @@ func TestWebOtherHarnessSaysSo(t *testing.T) {
 		t.Errorf("chat note for a pi agent:\n%s", body)
 	}
 }
+
+func TestWebWrapAndClose(t *testing.T) {
+	parent := webFleet(t)
+	pane := claudePane("idle", "")
+	var typed []string
+	var closed []string
+	src := WebSource{FleetRoot: parent, Options: paneOpts(parent, "", &pane),
+		Prompt:    func(p, text string) error { typed = append(typed, p+" "+text); return nil },
+		ClosePane: func(p string) error { closed = append(closed, p); return nil }}
+	h := NewWebHandler(src)
+	page := func() string { _, body := get(t, h, "/w/alpha/Sigrid"); return body }
+
+	if body := page(); !strings.Contains(body, `action="/w/alpha/Sigrid/close"`) || !strings.Contains(body, "Wrap &amp; close") {
+		t.Fatalf("a live session lacks Wrap & close:\n%s", body)
+	}
+	if code, msg := post(t, h, "/w/alpha/Sigrid/close", nil, "X-GoAgentic", "1"); code != http.StatusAccepted {
+		t.Fatalf("close = %d %s", code, msg)
+	}
+	if len(typed) != 1 || typed[0] != "w1:p7 /agents:wrap" {
+		t.Errorf("typed = %q", typed)
+	}
+	if code, _ := post(t, h, "/w/alpha/Sigrid/close", nil, "X-GoAgentic", "1"); code != http.StatusConflict {
+		t.Errorf("a second close while wrapping = %d", code)
+	}
+	pane = claudePane("working", "")
+	if body := page(); !strings.Contains(body, "Wrapping up Sigrid…") || strings.Contains(body, "/send\"") || len(closed) != 0 {
+		t.Errorf("wrapping: banner, no send box, pane open:\n%s", body)
+	}
+	// It wrote its session log and settled: the pane closes.
+	write(t, filepath.Join(parent, "alpha/agents/Sigrid/memory/sessions/2026-10-25-wrapped.md"), "---\ndate: 2026-10-25\n---\n")
+	pane = claudePane("idle", "")
+	if body := page(); len(closed) != 1 || closed[0] != "w1:p7" || !strings.Contains(body, "<strong>Not running</strong>") {
+		t.Errorf("wrapped: pane closed and not running; closed = %q\n%s", closed, body)
+	}
+
+	// Stopped without a log (it asked something): no close, Close anyway.
+	pane = claudePane("idle", "")
+	post(t, h, "/w/alpha/Sigrid/close", nil, "X-GoAgentic", "1")
+	pane = claudePane("working", "")
+	page()
+	pane = claudePane("idle", "")
+	body := page()
+	if len(closed) != 1 || !strings.Contains(body, "stopped before its wrap finished") || !strings.Contains(body, "Close anyway") || !strings.Contains(body, "data-confirm=") {
+		t.Errorf("stopped: pane stays, Close anyway offered; closed = %q\n%s", closed, body)
+	}
+	if code, _ := post(t, h, "/w/alpha/Sigrid/close", url.Values{"force": {"1"}}, "X-GoAgentic", "1"); code != http.StatusNoContent || len(closed) != 2 {
+		t.Errorf("close anyway = %d, closed = %q", code, closed)
+	}
+
+	// Codex types its own wrap command; nothing running or a peer pane: refused.
+	pane = &LivePane{Name: "sigrid", PaneID: "w1:p9", Agent: "codex", Status: "idle", Running: true}
+	post(t, NewWebHandler(src), "/w/alpha/Sigrid/close", nil, "X-GoAgentic", "1")
+	if typed[len(typed)-1] != "w1:p9 $agents-wrap" {
+		t.Errorf("codex wrap typed = %q", typed[len(typed)-1])
+	}
+	for name, p := range map[string]*LivePane{"stopped": nil, "peer": {Name: "sigrid-peer", PaneID: "w1:p3", Agent: "claude", Status: "idle", Running: true}} {
+		pane = p
+		if code, _ := post(t, NewWebHandler(src), "/w/alpha/Sigrid/close", nil, "X-GoAgentic", "1"); code != http.StatusConflict {
+			t.Errorf("%s: close = %d, want 409", name, code)
+		}
+	}
+	if code, _ := post(t, h, "/w/alpha/Sigrid/close", nil); code != http.StatusForbidden {
+		t.Errorf("close without the header = %d", code)
+	}
+}

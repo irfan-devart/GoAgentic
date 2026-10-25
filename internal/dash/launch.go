@@ -20,13 +20,19 @@ var ErrNoHerdr = errors.New("opening an agent needs Herdr")
 // startCommand is the harness-specific way to start an agent (conventions
 // § Invocation).
 func startCommand(harness, name string) string {
+	return frameworkCommand(harness, "start") + " " + name
+}
+
+// frameworkCommand is how a framework command (start, wrap, …) is typed in
+// the harness.
+func frameworkCommand(harness, cmd string) string {
 	switch harness {
 	case "codex":
-		return "$agents-start " + name
+		return "$agents-" + cmd
 	case "opencode", "pi", "cursor":
-		return "/agents-start " + name
+		return "/agents-" + cmd
 	default: // claude, gemini
-		return "/agents:start " + name
+		return "/agents:" + cmd
 	}
 }
 

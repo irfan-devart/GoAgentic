@@ -63,10 +63,11 @@ main.addEventListener("submit", async e => {
   const form = e.target.closest("form.answer");
   if (!form) return;
   e.preventDefault();
+  if (form.dataset.confirm && !confirm(form.dataset.confirm)) return;
   const button = form.querySelector("button"), status = form.querySelector(".status");
   button.disabled = true;
   status.classList.remove("error");
-  status.textContent = form.classList.contains("start") ? "Starting…" : "Sending…";
+  status.textContent = form.classList.contains("start") ? "Starting…" : form.classList.contains("close") ? "Wrapping up…" : "Sending…";
   inflight++;
   try {
     const res = await fetch(form.action, {method: "POST", headers: {"X-GoAgentic": "1"}, body: new URLSearchParams(new FormData(form))});
@@ -211,7 +212,9 @@ main.addEventListener("keydown", e => {
 {{if .Loading}}<div class="loading" role="status"><span class="spin" aria-hidden="true">⠋</span> <strong>{{.LoadingText}}</strong>
 <p class="dim">Opening its pane and loading its context. The conversation starts here once {{.Name}} is ready.</p></div>
 {{else if .Prompt}}<p class="ended"><strong>{{.Name}} is waiting on a prompt in its pane</strong> (a folder-trust question, say). Answer it there; the conversation starts here after.</p>
-{{else if .ChatLive}}<div class="chat" id="chat">
+{{else if .ChatLive}}{{if .Wrapping}}<div class="loading wrapping" role="status"><span class="spin" aria-hidden="true">⠋</span> <strong>Wrapping up {{.Name}}…</strong> <span class="dim">It records the session, then its pane closes.</span></div>
+{{else if .WrapStopped}}<p class="ended"><strong>{{.Name}} stopped before its wrap finished</strong> (no session log written). Read its last message below; answer it, or close anyway.</p>
+{{end}}<div class="chat" id="chat">
 {{if .ChatNote}}<p class="dim">{{.ChatNote}}</p>{{end}}
 {{range .Chat}}{{if eq .Kind "you"}}<div class="msg you"><div class="bubble">{{.Text}}</div><time>{{.At.Local.Format "15:04"}}</time></div>
 {{else if eq .Kind "agent"}}<div class="msg agent"><div class="bubble">{{.HTML}}</div><time>{{.At.Local.Format "15:04"}}</time></div>
@@ -219,12 +222,18 @@ main.addEventListener("keydown", e => {
 {{end}}{{end}}
 </div>
 {{else}}<p class="ended"><strong>Not running</strong>{{if not .LastEnded.IsZero}} · last session ended {{.LastEnded.Local.Format "Mon 15:04"}}{{end}}{{with .SessionHref}} (<a href="{{.}}">log →</a>){{end}}</p>
-{{end}}{{if or .Loading .Prompt}}{{else if .CanSend}}<form class="answer send" method="post" action="{{.SendURL}}">
+{{end}}{{if or .Loading .Prompt .Wrapping}}{{else if .CanSend}}<form class="answer send" method="post" action="{{.SendURL}}">
   <textarea name="text" rows="2" maxlength="4000" placeholder="Message {{.Name}}" aria-label="Message {{.Name}}"></textarea>
   <div class="row"><button type="submit">Send</button> <span class="dim hint">⌘/Ctrl-Enter · typed into its pane</span> <span class="status"></span></div>
-</form>{{else if .CanStart}}<form class="answer start" method="post" action="{{.StartURL}}">
+</form>{{if and .CloseURL (not .WrapStopped)}}<form class="answer close" method="post" action="{{.CloseURL}}">
+  <div class="row"><button type="submit" class="quiet">Wrap &amp; close</button> <span class="dim hint">Runs its wrap, then closes the pane.</span> <span class="status{{if .CloseError}} error{{end}}">{{.CloseError}}</span></div>
+</form>{{end}}{{else if .CanStart}}<form class="answer start" method="post" action="{{.StartURL}}">
   <div class="row"><button type="submit">Start {{.Name}}</button> <span class="dim hint">Opens it in a new Herdr tab ({{.Harness}}) and runs its start; your view stays put.</span> <span class="status{{if .StartError}} error{{end}}">{{.StartError}}</span></div>
 </form>{{else}}<p class="dim send-note">{{.SendNote}}</p>{{end}}
+{{if and .WrapStopped .CloseURL}}<form class="answer close" method="post" action="{{.CloseURL}}" data-confirm="Close {{.Name}}'s pane without a finished wrap? Anything it has not recorded is lost.">
+  <input type="hidden" name="force" value="1">
+  <div class="row"><button type="submit" class="danger">Close anyway</button> <span class="status{{if .CloseError}} error{{end}}">{{.CloseError}}</span></div>
+</form>{{end}}
 {{if and .ChatLive (not .Loading) (not .Prompt)}}<p class="dim chat-foot">Read from the Claude Code transcript; thinking and tool output are left out.</p>{{end}}
 </aside></div>
 {{end}}
