@@ -74,13 +74,13 @@ main.addEventListener("submit", async e => {
   if (!form) return;
   e.preventDefault();
   if (form.dataset.confirm && !confirm(form.dataset.confirm)) return;
-  const button = form.querySelector("button[type=submit]"), status = form.querySelector(".status");
+  const button = e.submitter || form.querySelector("button[type=submit]"), status = form.querySelector(".status");
   button.disabled = true;
   status.classList.remove("error");
   status.textContent = form.classList.contains("start") ? "Starting…" : form.classList.contains("close") ? "Wrapping up…" : "Sending…";
   inflight++;
   try {
-    const res = await fetch(form.action, {method: "POST", headers: {"X-GoAgentic": "1"}, body: sendBody(form)});
+    const res = await fetch(form.action, {method: "POST", headers: {"X-GoAgentic": "1"}, body: sendBody(form, e.submitter)});
     if (!res.ok) throw new Error((await res.text()).trim() || res.statusText);
     const ta = form.querySelector("textarea");
     if (ta) ta.value = "";
@@ -125,8 +125,9 @@ function renderThumbs() {
     return t;
   }));
 }
-function sendBody(form) {
+function sendBody(form, submitter) {
   const data = new FormData(form);
+  if (submitter?.name) data.set(submitter.name, submitter.value);
   data.delete("image");
   if (!form.classList.contains("send") || !pending.length) return new URLSearchParams(data);
   for (const f of pending) data.append("image", f, f.name || "screenshot.png");
@@ -276,8 +277,8 @@ main.addEventListener("keydown", e => {
   {{if .Answers}}<p class="dim">{{.Agent}} picks this up at its next start{{if .AgentLive}}. It is running now, so it will not see this until it restarts; reply in its chat to reach it now{{end}}.</p>{{end}}
   {{if .Reply}}<form class="answer reply" method="post" action="{{.SendURL}}">
     <input type="hidden" name="id" value="{{trimHash .ID}}">
-    <textarea name="text" rows="3" maxlength="4000" placeholder="Your reply to {{.Agent}}" aria-label="Reply on #{{trimHash .ID}}"></textarea>
-    <div class="row"><button type="submit">Reply now</button> <span class="dim hint">{{.Agent}} is running: typed into its session as “Re #{{trimHash .ID}}: …” · ⌘/Ctrl-Enter</span> <span class="status"></span></div>
+    <textarea name="text" rows="3" maxlength="4000" placeholder="Your update for {{.Agent}}" aria-label="Update on #{{trimHash .ID}}"></textarea>
+    <div class="row"><button type="submit" name="ask" value="more" class="quiet" formnovalidate>More info</button> <button type="submit">Provide update</button> <span class="dim hint">{{.Agent}} is running: More info asks it “#{{trimHash .ID}}?”; an update is typed in as “Update on #{{trimHash .ID}}: …” · ⌘/Ctrl-Enter</span> <span class="status"></span></div>
   </form>{{else if .CanAnswer}}<form class="answer" method="post" action="{{.AnswerURL}}">
     <input type="hidden" name="id" value="{{trimHash .ID}}">
     <textarea name="text" rows="3" maxlength="4000" placeholder="{{if .Answers}}Add to your answer{{else}}Your answer to {{.Agent}}{{end}}" aria-label="Answer #{{trimHash .ID}}"></textarea>

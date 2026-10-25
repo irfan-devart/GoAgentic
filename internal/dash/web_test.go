@@ -376,8 +376,15 @@ func TestWebSendTypesIntoTheLivePane(t *testing.T) {
 	if !strings.Contains(body, `class="answer reply" method="post" action="/w/alpha/Sigrid/send"`) || strings.Contains(body, `action="/w/alpha/Sigrid/answer"`) {
 		t.Errorf("a running agent's items want Reply, not Answer:\n%s", body)
 	}
-	if code, msg := post(t, h, "/w/alpha/Sigrid/send", url.Values{"id": {"5"}, "text": {"Yes, tidy it."}}, "X-GoAgentic", "1"); code != http.StatusNoContent || len(sent) != 2 || sent[1][1] != "Re #5: Yes, tidy it." {
+	if code, msg := post(t, h, "/w/alpha/Sigrid/send", url.Values{"id": {"5"}, "text": {"Yes, tidy it."}}, "X-GoAgentic", "1"); code != http.StatusNoContent || len(sent) != 2 || sent[1][1] != "Update on #5: Yes, tidy it." {
 		t.Errorf("reply = %d %s, prompted %q", code, msg, sent)
+	}
+	// More info needs no text: it asks the agent the item's shorthand.
+	if code, msg := post(t, h, "/w/alpha/Sigrid/send", url.Values{"id": {"5"}, "ask": {"more"}, "text": {""}}, "X-GoAgentic", "1"); code != http.StatusNoContent || len(sent) != 3 || sent[2][1] != "#5?" {
+		t.Errorf("more info = %d %s, prompted %q", code, msg, sent)
+	}
+	if !strings.Contains(body, `name="ask" value="more"`) || !strings.Contains(body, ">Provide update</button>") {
+		t.Errorf("an item's reply box wants More info and Provide update:\n%s", body)
 	}
 	if _, body := get(t, h, "/w/alpha"); !strings.Contains(body, "your turn") || !strings.Contains(body, `class="current bold" href="/w/alpha"`) {
 		t.Errorf("Now and the sidebar lack Sigrid's turn:\n%s", body)
@@ -403,7 +410,7 @@ func TestWebSendTypesIntoTheLivePane(t *testing.T) {
 			t.Errorf("%s = %d, want %d (%s)", name, code, c.want, msg)
 		}
 	}
-	if len(sent) != 2 {
+	if len(sent) != 3 {
 		t.Errorf("a refused send must type nothing: %q", sent)
 	}
 

@@ -642,13 +642,17 @@ func (s *webServer) send(w http.ResponseWriter, r *http.Request) {
 	}
 	text := strings.TrimSpace(r.FormValue("text"))
 	images := r.MultipartForm != nil && len(r.MultipartForm.File["image"]) > 0
+	id := strings.TrimPrefix(r.FormValue("id"), "#")
 	switch {
+	case id != "" && r.FormValue("ask") == "more":
+		// More info on an item: the shorthand for what it needs from you.
+		text = "#" + id + "?"
 	case text == "" && !images:
 		http.Error(w, "nothing to send", http.StatusBadRequest)
 		return
-	case r.FormValue("id") != "":
-		// A reply to an item, from its Reply box: say which.
-		text = "Re #" + strings.TrimPrefix(r.FormValue("id"), "#") + ": " + text
+	case id != "":
+		// An update on an item, from its box: say which.
+		text = "Update on #" + id + ": " + text
 	case len(text) > maxAnswer:
 		http.Error(w, fmt.Sprintf("message longer than %d characters", maxAnswer), http.StatusBadRequest)
 		return
