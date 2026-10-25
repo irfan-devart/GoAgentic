@@ -101,8 +101,8 @@ func TestCron(t *testing.T) {
 func TestWebScheduledCard(t *testing.T) {
 	parent := webFleet(t)
 	h := NewWebHandler(WebSource{FleetRoot: parent, Options: webOptions})
-	if _, body := get(t, h, "/w/alpha/Sigrid"); strings.Contains(body, "card-sched") {
-		t.Errorf("no tasks: no Scheduled card")
+	if _, body := get(t, h, "/w/alpha/Sigrid"); !strings.Contains(body, `class="card card-sched quiet"`) || !strings.Contains(body, "No scheduled tasks.") {
+		t.Errorf("no tasks: want a quiet Scheduled card saying so")
 	}
 	write(t, filepath.Join(parent, "alpha/agents/scheduled-tasks.md"), registerFixture)
 	_, body := get(t, h, "/w/alpha/Sigrid")

@@ -317,9 +317,9 @@ main.addEventListener("keydown", e => {
 <div class="info-cards">
 {{with .Focus}}<section class="card card-focus"><h3 class="card-head"><span class="cdot"></span>Session priorities<span class="agreed{{if not .Agreed}} pending{{end}}">{{if .Agreed}}agreed {{else}}proposed {{end}}{{.At.Local.Format "15:04"}}</span></h3>
 <ol class="focus-list">{{range .Items}}<li>{{.}}</li>{{end}}</ol>{{if not .Agreed}}<p class="dim sub">Waiting for you to agree in the chat.</p>{{end}}</section>{{end}}
-<section class="card card-foryou{{if not (or .Mine .Answered .Inbox)}} quiet{{end}}"><h3 class="card-head"><span class="cdot"></span>Waiting on you{{with .Mine}}<span class="pill">{{len .}}</span>{{end}}</h3>
+<section class="card card-foryou{{if not (or .Mine .Answered)}} quiet{{end}}"><h3 class="card-head"><span class="cdot"></span>Waiting on you{{with .Mine}}<span class="pill">{{len .}}</span>{{end}}</h3>
 {{if or .Mine .Answered}}<ul class="items">{{range .Mine}}<li>{{template "item" .}}</li>{{end}}{{range .Answered}}<li>{{template "item" .}}</li>{{end}}</ul>{{else}}<p class="dim none">Nothing waiting on you.</p>{{end}}
-{{if and .Inbox (not .Scheduled)}}<p class="inbox-note">{{.Inbox}} scheduled run(s) not yet read: start {{.Name}} to drain its inbox</p>{{end}}</section>
+</section>
 
 {{if not .Focus}}<section class="card card-plan{{if not .Plan}} quiet{{end}}"><h3 class="card-head"><span class="cdot"></span>{{if .ChatLive}}Plan from its last wrap{{else}}Next session{{end}}</h3>
 {{if and .ChatLive .Plan}}<p class="dim sub">Set at its last wrap; the session beside may have moved on.</p>{{end}}{{template "plan" .Plan}}</section>{{end}}
@@ -327,9 +327,9 @@ main.addEventListener("keydown", e => {
 {{if .Others}}<section class="card card-waiting"><h3 class="card-head"><span class="cdot"></span>Waiting on others<span class="pill">{{len .Others}}</span></h3>{{template "section" .Others}}</section>{{end}}
 {{if .Blocked}}<section class="card card-blocked"><h3 class="card-head"><span class="cdot"></span>Blocked<span class="pill">{{len .Blocked}}</span></h3>{{template "section" .Blocked}}</section>{{end}}
 <section class="card card-open{{if not .Open}} quiet{{end}}"><h3 class="card-head"><span class="cdot"></span>Open actions<span class="pri-counts">P1 {{index .OpenCounts "P1"}}  P2 {{index .OpenCounts "P2"}}  P3 {{index .OpenCounts "P3"}}</span></h3>{{template "section" .Open}}</section>
-{{if .Scheduled}}<section class="card card-sched{{if .SchedMissed}} missed{{end}}"><h3 class="card-head"><span class="cdot"></span>Scheduled<span class="pill">{{len .Scheduled}}</span></h3>
-<ul class="tasks">{{range .Scheduled}}<li{{if .Off}} class="off"{{end}}><span class="task">{{.ID}}</span> <span class="dim">{{.When}}</span> <span class="runs">{{if .Missed}}<span class="blocked">⚑ {{.Missed}}</span> · {{end}}<span class="dim">{{.Last}} · {{.Next}}</span></span></li>{{end}}</ul>
-{{if .Inbox}}<p class="inbox-note">{{plural .Inbox "run"}} not yet read: start {{.Name}} to drain its inbox</p>{{end}}</section>{{end}}
+<section class="card card-sched{{if .SchedMissed}} missed{{else if not (or .Scheduled .Inbox)}} quiet{{end}}"><h3 class="card-head"><span class="cdot"></span>Scheduled{{with .Scheduled}}<span class="pill">{{len .}}</span>{{end}}</h3>
+{{if .Scheduled}}<ul class="tasks">{{range .Scheduled}}<li{{if .Off}} class="off"{{end}}><span class="task">{{.ID}}</span> <span class="dim">{{.When}}</span> <span class="runs">{{if .Missed}}<span class="blocked">⚑ {{.Missed}}</span> · {{end}}<span class="dim">{{.Last}} · {{.Next}}</span></span></li>{{end}}</ul>{{else}}<p class="dim none">No scheduled tasks.</p>{{end}}
+{{if .Inbox}}<p class="inbox-note">{{plural .Inbox "run"}} not yet read: start {{.Name}} to drain its inbox</p>{{end}}</section>
 
 <footer class="info-foot">
 {{if .Parked}}<details data-key="parked"><summary>{{len .Parked}} parked</summary>{{template "section" .Parked}}</details>{{end}}
