@@ -191,6 +191,8 @@ type page struct {
 	// sessions, and what waits on the principal, ranked (web_views.go).
 	Now   []nowLine
 	Queue *queueView
+	// Nav is the app shell: workspace picker and sidebar (web_nav.go).
+	Nav *nav
 
 	Fleet     []fleetRow
 	Workspace *webWorkspace
@@ -330,7 +332,7 @@ func (s *webServer) home(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	c := f.Counts()
-	p := page{Title: "Fleet", Heading: "FLEET", All: all, Scanned: f.Scanned, Live: f.Live, Counts: &c, First: "you"}
+	p := page{Title: "All workspaces", Heading: "All workspaces", All: all, Scanned: f.Scanned, Live: f.Live, Counts: &c, First: "you"}
 	var queue []queueLine
 	for _, ws := range f.Workspaces {
 		p.Now = append(p.Now, s.nowLines(ws, all)...)
@@ -346,6 +348,7 @@ func (s *webServer) home(w http.ResponseWriter, r *http.Request) {
 	}
 	sortNow(p.Now)
 	p.Queue = makeQueue(queue, 10, true)
+	p.Nav = s.fleetNav(f, all)
 	s.render(w, r, p)
 }
 
@@ -399,9 +402,9 @@ func (s *webServer) workspace(w http.ResponseWriter, r *http.Request) {
 	}
 	c := ws.Counts()
 	p := page{
-		Title: ws.Name, Heading: strings.ToUpper(ws.Name), Crumbs: s.crumbs(all, ws.Name), All: all, Scanned: ws.Scanned, Live: ws.Live,
+		Title: ws.Name, Heading: ws.Name, Crumbs: s.crumbs(all, ws.Name), All: all, Scanned: ws.Scanned, Live: ws.Live,
 		Counts: &c, First: firstName(ws.Principal), Workspace: &webWorkspace{},
-		Now: s.nowLines(ws, all),
+		Now: s.nowLines(ws, all), Nav: s.workspaceNav(ws, "", all),
 	}
 	sortNow(p.Now)
 	p.Queue = makeQueue(queueLines(ws, all), 8, false)
@@ -482,6 +485,7 @@ func (s *webServer) agent(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, page{
 		Title: a.Name + " · " + ws.Name, Crumbs: s.crumbs(all, ws.Name, crumb{a.Name, link(all, "w", ws.Name, a.Name)}),
 		All: all, Scanned: ws.Scanned, Live: ws.Live, First: firstName(ws.Principal), Agent: wa,
+		Nav: s.workspaceNav(ws, a.Name, all),
 	})
 }
 
@@ -530,6 +534,7 @@ func (s *webServer) file(w http.ResponseWriter, r *http.Request) {
 		Crumbs: s.crumbs(all, ws.Name, crumb{a.Name, link(all, "w", ws.Name, a.Name)},
 			crumb{rel, ""}),
 		All: all, Scanned: ws.Scanned, Live: ws.Live, File: &webFile{Name: rel, Text: string(data)},
+		Nav: s.workspaceNav(ws, a.Name, all),
 	})
 }
 

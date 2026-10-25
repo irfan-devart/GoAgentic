@@ -16,7 +16,7 @@
 // keeps its focus.
 const main = document.getElementById("main");
 let inflight = 0; // a post is waiting on the server: its form must stay
-const busy = () => inflight || document.hidden || String(getSelection()) ||
+const busy = () => inflight || document.hidden || String(getSelection()) || document.activeElement?.tagName === "SELECT" ||
   [...main.querySelectorAll("textarea")].some(t => t.value.trim() || (t === document.activeElement && !t.closest("form.send")));
 // The chat follows new messages while you are at its bottom, and stays put
 // while you read further up.
@@ -36,7 +36,10 @@ async function refresh(force) {
   const html = await res.text();
   if (!force && busy()) return; // started typing while it loaded
   const st = chatState(), typing = document.activeElement?.closest("form.send");
+  // The sidebar and the panes keep where you had scrolled to.
+  const scrolled = [...main.querySelectorAll("[data-scroll]")].map(el => [el.dataset.scroll, el.scrollTop]);
   main.innerHTML = html;
+  for (const [key, top] of scrolled) { const el = main.querySelector(`[data-scroll="${key}"]`); if (el) el.scrollTop = top; }
   if (typing) main.querySelector("form.send textarea")?.focus();
   for (const key of open) main.querySelector(`details[data-key="${CSS.escape(key)}"]`)?.setAttribute("open", "");
   chatRestore(st);
@@ -92,7 +95,21 @@ main.addEventListener("keydown", e => {
 </html>{{end}}
 
 {{define "main"}}
-<nav class="crumbs">{{range $i, $c := .Crumbs}}{{if $i}}<span class="dim"> › </span>{{end}}{{if $c.Href}}<a href="{{$c.Href}}">{{$c.Name}}</a>{{else}}<span>{{$c.Name}}</span>{{end}}{{end}}</nav>
+<div class="app{{if .Agent}} agent-view{{end}}">
+<header class="topbar">
+  <button class="menu" type="button" aria-label="Show the sidebar" onclick="document.body.classList.toggle('nav-open')">☰</button>
+  {{with .Nav}}{{if .Workspaces}}<select class="picker" aria-label="Workspace" onchange="location.href = this.value">
+    <option value="{{.AllHref}}"{{if not .Current}} selected{{end}}>All workspaces</option>
+    {{range .Workspaces}}<option value="{{.Href}}"{{if .Current}} selected{{end}}>{{.Name}}</option>{{end}}
+  </select>{{else}}<span class="picker one">{{.Current}}</span>{{end}}{{end}}
+  <span class="topbar-right">{{if .All}}<a href="?">hide retired</a>{{else}}<a href="?all=1">show retired</a>{{end}} · {{.Scanned.Format "15:04:05"}}</span>
+</header>
+<nav class="sidebar" data-scroll="sidebar">{{with .Nav}}
+  <a class="nav-home{{if .OnHome}} current{{end}}" href="{{.HomeHref}}">⌂ {{if .Current}}{{.Current}} home{{else}}Overview{{end}}</a>
+  <h4>{{if .Current}}Agents{{else}}Workspaces{{end}}</h4>
+  <ul>{{range .Items}}<li><a class="{{if .Current}}current{{end}}{{if .Bold}} bold{{end}}" href="{{.Href}}"{{if .State}} title="{{.State}}"{{end}}><span class="dot {{if .Dot}}{{.Dot}}{{else}}off{{end}}"></span><span class="nm">{{.Name}}</span>{{if .Badge}}<span class="badge" title="{{.Badge}} waiting on you">{{.Badge}}</span>{{end}}</a></li>{{end}}</ul>
+{{end}}</nav>
+<section class="content" data-scroll="content">
 {{if .Counts}}{{template "counts" .}}{{end}}
 {{if .Now}}{{template "now" .}}{{end}}
 {{if .Queue}}{{template "queue" .Queue}}{{end}}
@@ -100,8 +117,8 @@ main.addEventListener("keydown", e => {
 {{if .Workspace}}{{template "workspace" .}}{{end}}
 {{if .Agent}}{{template "agent" .}}{{end}}
 {{with .File}}<h2>{{.Name}}</h2><pre class="file">{{.Text}}</pre>{{end}}
-<footer class="dim">Answer: into a stopped agent's inbox, read at its next start · Reply and messages: typed into a running agent's session · Start opens it in Herdr · trackers are never edited · refreshes every 5 s · scanned {{.Scanned.Format "15:04:05"}} ·
-{{if .All}}<a href="?">hide retired</a>{{else}}<a href="?all=1">show retired</a>{{end}}</footer>
+</section>
+</div>
 {{end}}
 
 {{define "counts"}}{{$c := .Counts}}
@@ -221,9 +238,9 @@ main.addEventListener("keydown", e => {
 </form>{{end}}
 <p class="dim facts">{{range $i, $f := .Facts}}{{if $i}} · {{end}}{{$f}}{{end}}</p>
 </header>
-<div class="agent-grid{{if .Active}} live{{end}}">
-<section class="{{if .Active}}chat-pane{{else}}session-card{{end}}">{{template "session" .}}</section>
-<div class="detail">{{template "tracker" .}}</div>
+<div class="agent-split">
+<div class="info" data-scroll="info">{{template "tracker" .}}</div>
+<div class="chat-col">{{template "session" .}}</div>
 </div>
 {{end}}
 {{end}}

@@ -62,14 +62,14 @@ func TestWebFleetWorkspaceAgent(t *testing.T) {
 	if code != 200 {
 		t.Fatalf("fleet = %d", code)
 	}
-	for _, want := range []string{"FLEET", `href="/w/alpha"`, `href="/w/Beta"`, "Sigrid 2", "<!doctype html>"} {
+	for _, want := range []string{"<h1>All workspaces</h1>", `<option value="/w/alpha">alpha</option>`, `<h4>Workspaces</h4>`, `href="/w/alpha"`, `href="/w/Beta"`, "Sigrid 2", "<!doctype html>"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("fleet page lacks %q", want)
 		}
 	}
 
 	_, body = get(t, h, "/w/alpha")
-	for _, want := range []string{"ALPHA", "Waiting on you", `href="/w/alpha/Sigrid"`, "#5", "Tidy memory and links", "» #3 ship the thing"} {
+	for _, want := range []string{"<h1>alpha</h1>", `<option value="/w/alpha" selected>alpha</option>`, `class="nav-home current"`, "<h4>Agents</h4>", "Waiting on you", `href="/w/alpha/Sigrid"`, "#5", "Tidy memory and links", "» #3 ship the thing"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("workspace page lacks %q", want)
 		}
@@ -78,6 +78,7 @@ func TestWebFleetWorkspaceAgent(t *testing.T) {
 	_, body = get(t, h, "/w/alpha/Sigrid")
 	for _, want := range []string{
 		"Sigrid", "Lead", "Next session", "Waiting on you",
+		`class="current" href="/w/alpha/Sigrid"`, `<div class="info"`, `<div class="chat-col">`, // the sidebar marks it; info beside the chat
 		`Open actions <span class="dim">— P1 1`, "Parked — 1", "Shipped it",
 		`href="/w/alpha/Sigrid/file?p=items%2F5-tidy-memory.md"`, // history note link
 		"Long detail | with a pipe",                              // the rest of the Action cell
@@ -96,7 +97,7 @@ func TestWebFleetWorkspaceAgent(t *testing.T) {
 func TestWebPartialAndAll(t *testing.T) {
 	h := NewWebHandler(WebSource{FleetRoot: webFleet(t), Options: webOptions})
 	_, body := get(t, h, "/w/alpha", "X-Partial", "1")
-	if strings.Contains(body, "<!doctype html>") || !strings.Contains(body, "ALPHA") {
+	if strings.Contains(body, "<!doctype html>") || !strings.Contains(body, "<h1>alpha</h1>") {
 		t.Errorf("partial render must be <main> only:\n%.200s", body)
 	}
 	_, body = get(t, h, "/w/alpha?all=1")
