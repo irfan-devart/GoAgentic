@@ -138,7 +138,7 @@ func NewTranscriptCache() *TranscriptCache {
 
 var (
 	startCmdRe   = regexp.MustCompile(`<command-name>/?agents:start</command-name>`)
-	startArgsRe  = regexp.MustCompile(`<command-args>([^<]*)</command-args>`)
+	startArgsRe  = regexp.MustCompile(`(?s)<command-args>(.*?)</command-args>`)
 	timestampRe  = regexp.MustCompile(`"timestamp":"([^"]+)"`)
 	maxHeadBytes = int64(512 * 1024)
 )
