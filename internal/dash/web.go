@@ -92,6 +92,9 @@ type webServer struct {
 	// auto-refreshing tab or two must not pile them up.
 	mu   sync.Mutex
 	chat *ChatCache
+	// fleet caches the sidebar's workspace list (web_nav.go).
+	fleetMu sync.Mutex
+	fleet   fleetCache
 	// launches holds the agents (ws/agent) a Start opened and that are not
 	// yet ready, so the page shows them loading and a second click or tab
 	// does not open a second session.
@@ -176,35 +179,26 @@ func (s *webServer) allowedHost(hostport string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-// page is everything the template needs; one of Fleet, Workspace, Agent or
-// File is set.
+// page is everything the template needs; one of Workspace, Agent or File
+// is set.
 type page struct {
 	Title   string
 	Heading string
-	Crumbs  []crumb
 	All     bool
 	Scanned time.Time
 	Live    bool
 	Counts  *Counts
 	First   string
-	// Now and Queue lead the fleet and workspace pages: the running
+	// Now and Queue lead the workspace's home: the running
 	// sessions, and what waits on the principal, ranked (web_views.go).
 	Now   []nowLine
 	Queue *queueView
 	// Nav is the app shell: workspace picker and sidebar (web_nav.go).
 	Nav *nav
 
-	Fleet     []fleetRow
 	Workspace *webWorkspace
 	Agent     *webAgent
 	File      *webFile
-}
-
-type crumb struct{ Name, Href string }
-
-type fleetRow struct {
-	Name, Href, Tone, Live, NeedsYou string
-	Counts                           Counts
 }
 
 type webWorkspace struct {
@@ -318,38 +312,26 @@ func link(all bool, parts ...string) string {
 	return p
 }
 
+// home opens a workspace: the one last looked at (the ws cookie), else the
+// first.
 func (s *webServer) home(w http.ResponseWriter, r *http.Request) {
-	all := s.all(r)
-	if s.src.FleetRoot == "" {
-		http.Redirect(w, r, link(all, "w", filepath.Base(s.src.Root)), http.StatusFound)
-		return
-	}
-	s.mu.Lock()
-	f, err := ScanFleet(s.src.FleetRoot, s.src.Options(all))
-	s.mu.Unlock()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	c := f.Counts()
-	p := page{Title: "All workspaces", Heading: "All workspaces", All: all, Scanned: f.Scanned, Live: f.Live, Counts: &c, First: "you"}
-	var queue []queueLine
-	for _, ws := range f.Workspaces {
-		p.Now = append(p.Now, s.nowLines(ws, all)...)
-		queue = append(queue, queueLines(ws, all)...)
-		live := "–"
-		if ws.Live {
-			live = fmt.Sprint(ws.Counts().Live)
+	name := filepath.Base(s.src.Root)
+	if s.src.FleetRoot != "" {
+		dirs := FleetDirs(s.src.FleetRoot)
+		if len(dirs) == 0 {
+			http.Error(w, "no workspaces under "+s.src.FleetRoot, http.StatusNotFound)
+			return
 		}
-		p.Fleet = append(p.Fleet, fleetRow{
-			Name: ws.Name, Href: link(all, "w", ws.Name), Tone: toneClass(workspaceTone(ws)),
-			Live: live, NeedsYou: NeedsYou(ws), Counts: ws.Counts(),
-		})
+		name = filepath.Base(dirs[0])
+		if c, err := r.Cookie("ws"); err == nil {
+			for _, dir := range dirs {
+				if filepath.Base(dir) == c.Value {
+					name = c.Value
+				}
+			}
+		}
 	}
-	sortNow(p.Now)
-	p.Queue = makeQueue(queue, 10, true)
-	p.Nav = s.fleetNav(f, all)
-	s.render(w, r, p)
+	http.Redirect(w, r, link(s.all(r), "w", name), http.StatusFound)
 }
 
 // scanWorkspace finds a workspace by its directory name and scans it.
@@ -384,15 +366,6 @@ func (s *webServer) fail(w http.ResponseWriter, err error) {
 	http.Error(w, err.Error(), http.StatusInternalServerError)
 }
 
-func (s *webServer) crumbs(all bool, ws string, more ...crumb) []crumb {
-	var out []crumb
-	if s.src.FleetRoot != "" {
-		out = append(out, crumb{"Fleet", link(all)})
-	}
-	out = append(out, crumb{ws, link(all, "w", ws)})
-	return append(out, more...)
-}
-
 func (s *webServer) workspace(w http.ResponseWriter, r *http.Request) {
 	all := s.all(r)
 	ws, err := s.scanWorkspace(r.PathValue("ws"), all)
@@ -402,12 +375,14 @@ func (s *webServer) workspace(w http.ResponseWriter, r *http.Request) {
 	}
 	c := ws.Counts()
 	p := page{
-		Title: ws.Name, Heading: ws.Name, Crumbs: s.crumbs(all, ws.Name), All: all, Scanned: ws.Scanned, Live: ws.Live,
+		Title: ws.Name, Heading: ws.Name, All: all, Scanned: ws.Scanned, Live: ws.Live,
 		Counts: &c, First: firstName(ws.Principal), Workspace: &webWorkspace{},
 		Now: s.nowLines(ws, all), Nav: s.workspaceNav(ws, "", all),
 	}
 	sortNow(p.Now)
-	p.Queue = makeQueue(queueLines(ws, all), 8, false)
+	p.Queue = makeQueue(queueLines(ws, all), 8)
+	// The home opens this workspace next time.
+	http.SetCookie(w, &http.Cookie{Name: "ws", Value: ws.Name, Path: "/", MaxAge: 365 * 24 * 3600, HttpOnly: true, SameSite: http.SameSiteLaxMode})
 	for _, a := range ws.Agents {
 		row := MakeRow(ws, a)
 		p.Workspace.Rows = append(p.Workspace.Rows, agentRow{
@@ -483,8 +458,8 @@ func (s *webServer) agent(w http.ResponseWriter, r *http.Request) {
 	wa.State, wa.StateClass = agentState(a, wa)
 	// No count header: the workspace's counts are not this agent's.
 	s.render(w, r, page{
-		Title: a.Name + " · " + ws.Name, Crumbs: s.crumbs(all, ws.Name, crumb{a.Name, link(all, "w", ws.Name, a.Name)}),
-		All: all, Scanned: ws.Scanned, Live: ws.Live, First: firstName(ws.Principal), Agent: wa,
+		Title: a.Name + " · " + ws.Name,
+		All:   all, Scanned: ws.Scanned, Live: ws.Live, First: firstName(ws.Principal), Agent: wa,
 		Nav: s.workspaceNav(ws, a.Name, all),
 	})
 }
@@ -531,9 +506,7 @@ func (s *webServer) file(w http.ResponseWriter, r *http.Request) {
 	}
 	s.render(w, r, page{
 		Title: rel + " · " + a.Name,
-		Crumbs: s.crumbs(all, ws.Name, crumb{a.Name, link(all, "w", ws.Name, a.Name)},
-			crumb{rel, ""}),
-		All: all, Scanned: ws.Scanned, Live: ws.Live, File: &webFile{Name: rel, Text: string(data)},
+		All:   all, Scanned: ws.Scanned, Live: ws.Live, File: &webFile{Name: rel, Text: string(data)},
 		Nav: s.workspaceNav(ws, a.Name, all),
 	})
 }

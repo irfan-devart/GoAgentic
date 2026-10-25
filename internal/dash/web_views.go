@@ -10,12 +10,11 @@ import (
 // The two views every page leads with. Now is the sessions running in a
 // pane, the only time-critical part: an agent whose turn has ended waits for
 // a reply in its chat. The queue is what waits on the principal in the
-// trackers, ranked across agents (and across workspaces on the fleet page),
-// answered at any time.
+// trackers, ranked across agents, answered at any time.
 
 // nowLine is one running session.
 type nowLine struct {
-	Agent, Href, Workspace, WsHref string
+	Agent, Href string
 	// State is what the session is doing, in the principal's terms; Class
 	// colours it.
 	State, Class string
@@ -34,7 +33,7 @@ func (s *webServer) nowLines(ws *Workspace, all bool) []nowLine {
 		if a.Live == nil || !a.Live.Running || !sessionPane(a.Live) {
 			continue
 		}
-		l := nowLine{Agent: a.Name, Href: link(all, "w", ws.Name, a.Name), Workspace: ws.Name, WsHref: link(all, "w", ws.Name)}
+		l := nowLine{Agent: a.Name, Href: link(all, "w", ws.Name, a.Name)}
 		switch {
 		case a.Live.Status == "blocked":
 			l.State, l.Class, l.order = "prompt in its pane", "blocked", 0
@@ -87,12 +86,10 @@ func cut(s string, n int) string {
 // queueLine is one thing waiting on the principal: an item, or an agent's
 // unread scheduled runs (Text).
 type queueLine struct {
-	Agent, AgentHref, Workspace, WsHref string
-	Item                                *webItem
-	Text                                string
-	Overdue                             bool
-	// ShowWs: the fleet page, where a line names its workspace too.
-	ShowWs bool
+	Agent, AgentHref string
+	Item             *webItem
+	Text             string
+	Overdue          bool
 	// rank orders the queue: overdue, P1–P3, no priority, unread runs,
 	// answered; pri orders the overdue among themselves.
 	rank, pri int
@@ -104,7 +101,7 @@ type queueLine struct {
 func queueLines(ws *Workspace, all bool) []queueLine {
 	var out []queueLine
 	for _, a := range ws.Agents {
-		base := queueLine{Agent: a.Name, AgentHref: link(all, "w", ws.Name, a.Name), Workspace: ws.Name, WsHref: link(all, "w", ws.Name)}
+		base := queueLine{Agent: a.Name, AgentHref: link(all, "w", ws.Name, a.Name)}
 		for _, it := range a.ForPrincipal(ws.Principal) {
 			wi := makeWebItem(ws, a, it, all)
 			l := base
@@ -152,16 +149,13 @@ func sortQueue(lines []queueLine) {
 // rest folded.
 type queueView struct {
 	Top, More []queueLine
-	// Fleet: lines name their workspace too.
-	Fleet bool
-	Total int
+	Total     int
 }
 
-func makeQueue(lines []queueLine, top int, fleet bool) *queueView {
+func makeQueue(lines []queueLine, top int) *queueView {
 	sortQueue(lines)
-	q := &queueView{Fleet: fleet}
-	for i, l := range lines {
-		lines[i].ShowWs = fleet
+	q := &queueView{}
+	for _, l := range lines {
 		if l.rank < 6 {
 			q.Total++
 		}

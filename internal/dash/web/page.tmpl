@@ -98,22 +98,19 @@ main.addEventListener("keydown", e => {
 <div class="app{{if .Agent}} agent-view{{end}}">
 <header class="topbar">
   <button class="menu" type="button" aria-label="Show the sidebar" onclick="document.body.classList.toggle('nav-open')">☰</button>
-  {{with .Nav}}{{if .Workspaces}}<select class="picker" aria-label="Workspace" onchange="location.href = this.value">
-    <option value="{{.AllHref}}"{{if not .Current}} selected{{end}}>All workspaces</option>
-    {{range .Workspaces}}<option value="{{.Href}}"{{if .Current}} selected{{end}}>{{.Name}}</option>{{end}}
-  </select>{{else}}<span class="picker one">{{.Current}}</span>{{end}}{{end}}
+  <span class="brand">{{with .Nav}}{{.Current}}{{end}}</span>
   <span class="topbar-right">{{if .All}}<a href="?">hide retired</a>{{else}}<a href="?all=1">show retired</a>{{end}} · {{.Scanned.Format "15:04:05"}}</span>
 </header>
 <nav class="sidebar" data-scroll="sidebar">{{with .Nav}}
-  <a class="nav-home{{if .OnHome}} current{{end}}" href="{{.HomeHref}}">⌂ {{if .Current}}{{.Current}} home{{else}}Overview{{end}}</a>
-  <h4>{{if .Current}}Agents{{else}}Workspaces{{end}}</h4>
-  <ul>{{range .Items}}<li><a class="{{if .Current}}current{{end}}{{if .Bold}} bold{{end}}" href="{{.Href}}"{{if .State}} title="{{.State}}"{{end}}><span class="dot {{if .Dot}}{{.Dot}}{{else}}off{{end}}"></span><span class="nm">{{.Name}}</span>{{if .Badge}}<span class="badge" title="{{.Badge}} waiting on you">{{.Badge}}</span>{{end}}</a></li>{{end}}</ul>
+  <h4>Workspaces</h4>
+  <ul>{{range .Workspaces}}{{template "navlink" .}}{{end}}</ul>
+  <h4>Agents</h4>
+  <ul>{{range .Agents}}{{template "navlink" .}}{{end}}</ul>
 {{end}}</nav>
 <section class="content" data-scroll="content">
 {{if .Counts}}{{template "counts" .}}{{end}}
 {{if .Now}}{{template "now" .}}{{end}}
 {{if .Queue}}{{template "queue" .Queue}}{{end}}
-{{if .Fleet}}{{template "fleet" .}}{{end}}
 {{if .Workspace}}{{template "workspace" .}}{{end}}
 {{if .Agent}}{{template "agent" .}}{{end}}
 {{with .File}}<h2>{{.Name}}</h2><pre class="file">{{.Text}}</pre>{{end}}
@@ -137,12 +134,14 @@ main.addEventListener("keydown", e => {
 
 {{define "state"}}<span class="state {{.Class}}">{{if .Working}}<span class="spin" aria-hidden="true">⠋</span> {{end}}{{.State}}</span>{{end}}
 
-{{define "now"}}{{$fleet := .Fleet}}
+{{define "navlink"}}<li><a class="{{if .Current}}current{{else if .Selected}}selected{{end}}{{if .Bold}} bold{{end}}" href="{{.Href}}"{{if .State}} title="{{.State}}"{{end}}><span class="dot {{if .Dot}}{{.Dot}}{{else}}off{{end}}"></span><span class="nm">{{.Name}}</span>{{if .Badge}}<span class="badge" title="{{.Badge}} waiting on you">{{.Badge}}</span>{{end}}</a></li>{{end}}
+
+{{define "now"}}
 <section class="now"><h2>Now <span class="dim">— sessions running in a pane</span></h2>
 <div class="scroll"><table class="now">
 <tbody>
 {{range .Now}}<tr class="{{.Class}}">
-  <td class="who"><a href="{{.Href}}">{{.Agent}}</a>{{if $fleet}} <a class="dim ws" href="{{.WsHref}}">{{.Workspace}}</a>{{end}}</td>
+  <td class="who"><a href="{{.Href}}">{{.Agent}}</a></td>
   <td class="st">{{template "state" .}}</td>
   <td class="last dim">{{.Last}}</td>
 </tr>{{end}}
@@ -152,37 +151,16 @@ main.addEventListener("keydown", e => {
 
 {{define "queue"}}
 <section class="queue"><h2 class="foryou">Waiting on you <span class="dim">— {{.Total}}, most urgent first</span></h2>
-{{if .Top}}<ul class="items queue{{if .Fleet}} fleet{{end}}">{{range .Top}}{{template "qline" .}}{{end}}</ul>
-{{with .More}}<details class="more-queue" data-key="queue-more"><summary class="dim">{{len .}} more</summary><ul class="items queue{{if $.Fleet}} fleet{{end}}">{{range .}}{{template "qline" .}}{{end}}</ul></details>{{end}}
+{{if .Top}}<ul class="items queue">{{range .Top}}{{template "qline" .}}{{end}}</ul>
+{{with .More}}<details class="more-queue" data-key="queue-more"><summary class="dim">{{len .}} more</summary><ul class="items queue">{{range .}}{{template "qline" .}}{{end}}</ul></details>{{end}}
 {{else}}<p class="dim none">Nothing waiting on you.</p>{{end}}
 </section>
 {{end}}
 
-{{define "qline"}}<li><span class="who"><a href="{{.AgentHref}}">{{.Agent}}</a>{{if .ShowWs}} <a class="dim ws" href="{{.WsHref}}">{{.Workspace}}</a>{{end}}</span> {{if .Item}}{{template "item" .Item}}{{else}}<span>{{.Text}}</span>{{end}}</li>{{end}}
+{{define "qline"}}<li><span class="who"><a href="{{.AgentHref}}">{{.Agent}}</a></span> {{if .Item}}{{template "item" .Item}}{{else}}<span>{{.Text}}</span>{{end}}</li>{{end}}
 
 {{define "legend"}}
 <p class="legend dim"><span class="dot blocked"></span> blocked <span class="dot waiting"></span> P1 waiting on others <span class="dot foryou"></span> waiting on you <span class="dot working"></span> working · no dot: nothing to act on</p>
-{{end}}
-
-{{define "fleet"}}
-<h2>Workspaces</h2>
-<div class="scroll"><table>
-<thead><tr><th></th><th>Workspace</th><th class="n">Agents</th><th class="n">Running</th><th class="n">On you</th><th class="n">Overdue</th><th class="n">Waiting</th><th class="n">Blocked</th><th class="n">Health</th><th>Waiting on you, by agent</th></tr></thead>
-<tbody>
-{{range .Fleet}}<tr>
-  <td><span class="dot {{.Tone}}"></span></td>
-  <td><a href="{{.Href}}">{{.Name}}</a></td>
-  <td class="n">{{.Counts.Agents}}</td>
-  <td class="n {{if .Counts.Live}}ok{{else}}dim{{end}}">{{.Live}}</td>
-  <td class="n {{if .Counts.ForYou}}foryou{{else}}dim{{end}}">{{.Counts.ForYou}}</td>
-  <td class="n {{if .Counts.Overdue}}blocked{{else}}dim{{end}}">{{.Counts.Overdue}}</td>
-  <td class="n {{if .Counts.Waiting}}waiting{{else}}dim{{end}}">{{.Counts.Waiting}}</td>
-  <td class="n {{if .Counts.Blocked}}blocked{{else}}dim{{end}}">{{.Counts.Blocked}}</td>
-  <td class="n {{if not .Counts.Health}}dim{{end}}">{{.Counts.Health}}</td>
-  <td class="needs">{{.NeedsYou}}</td>
-</tr>{{end}}
-</tbody></table></div>
-{{template "legend"}}
 {{end}}
 
 {{define "workspace"}}

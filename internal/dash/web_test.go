@@ -58,18 +58,33 @@ func TestWebFleetWorkspaceAgent(t *testing.T) {
 	parent := webFleet(t)
 	h := NewWebHandler(WebSource{FleetRoot: parent, Options: webOptions})
 
-	code, body := get(t, h, "/")
-	if code != 200 {
-		t.Fatalf("fleet = %d", code)
+	// The home opens the first workspace, then the one last looked at.
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, localReq("GET", "/", nil))
+	if rec.Code != http.StatusFound || rec.Header().Get("Location") != "/w/alpha" {
+		t.Errorf("home = %d %q, want the first workspace", rec.Code, rec.Header().Get("Location"))
 	}
-	for _, want := range []string{"<h1>All workspaces</h1>", `<option value="/w/alpha">alpha</option>`, `<h4>Workspaces</h4>`, `href="/w/alpha"`, `href="/w/Beta"`, "Sigrid 2", "<!doctype html>"} {
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, localReq("GET", "/w/Beta", nil))
+	req := localReq("GET", "/", nil)
+	for _, c := range rec.Result().Cookies() {
+		req.AddCookie(c)
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Header().Get("Location") != "/w/Beta" {
+		t.Errorf("home after Beta = %q, want /w/Beta", rec.Header().Get("Location"))
+	}
+
+	_, body := get(t, h, "/w/alpha")
+	for _, want := range []string{"<h4>Workspaces</h4>", `class="current" href="/w/alpha"`, `href="/w/Beta"`, "<h4>Agents</h4>", "<!doctype html>"} {
 		if !strings.Contains(body, want) {
-			t.Errorf("fleet page lacks %q", want)
+			t.Errorf("sidebar lacks %q", want)
 		}
 	}
 
 	_, body = get(t, h, "/w/alpha")
-	for _, want := range []string{"<h1>alpha</h1>", `<option value="/w/alpha" selected>alpha</option>`, `class="nav-home current"`, "<h4>Agents</h4>", "Waiting on you", `href="/w/alpha/Sigrid"`, "#5", "Tidy memory and links", "» #3 ship the thing"} {
+	for _, want := range []string{"<h1>alpha</h1>", "Waiting on you", `href="/w/alpha/Sigrid"`, "#5", "Tidy memory and links", "» #3 ship the thing"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("workspace page lacks %q", want)
 		}
@@ -361,8 +376,8 @@ func TestWebSendTypesIntoTheLivePane(t *testing.T) {
 	if code, msg := post(t, h, "/w/alpha/Sigrid/send", url.Values{"id": {"5"}, "text": {"Yes, tidy it."}}, "X-GoAgentic", "1"); code != http.StatusNoContent || len(sent) != 2 || sent[1][1] != "Re #5: Yes, tidy it." {
 		t.Errorf("reply = %d %s, prompted %q", code, msg, sent)
 	}
-	if _, body := get(t, h, "/"); !strings.Contains(body, "your turn") || !strings.Contains(body, `href="/w/alpha/Sigrid">Sigrid</a> <a class="dim ws"`) {
-		t.Errorf("the fleet's Now lacks Sigrid's turn:\n%s", body)
+	if _, body := get(t, h, "/w/alpha"); !strings.Contains(body, "your turn") || !strings.Contains(body, `class="current bold" href="/w/alpha"`) {
+		t.Errorf("Now and the sidebar lack Sigrid's turn:\n%s", body)
 	}
 
 	for name, c := range map[string]struct {
@@ -742,13 +757,13 @@ func TestQueueRanksAcrossAgents(t *testing.T) {
 		line("none", "", nil, -1),
 		line("p1-soon", "P1", day(1), -1),
 		line("late-p1", "P1", day(-1), 0),
-	}, 3, true)
+	}, 3)
 	var got []string
 	for _, l := range append(q.Top, q.More...) {
 		got = append(got, l.Agent)
 	}
 	want := "late-p1 late-p2 p1-soon p1-later p3 none answered"
-	if strings.Join(got, " ") != want || len(q.Top) != 3 || q.Total != 6 || !q.Top[0].ShowWs {
+	if strings.Join(got, " ") != want || len(q.Top) != 3 || q.Total != 6 {
 		t.Errorf("queue = %v (top %d, total %d), want %s", got, len(q.Top), q.Total, want)
 	}
 }

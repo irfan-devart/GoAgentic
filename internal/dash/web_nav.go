@@ -1,85 +1,112 @@
 package dash
 
-import "path/filepath"
+import "time"
 
-// The app shell around every page, laid out like a chat app: a top bar with
-// a workspace picker, a sidebar listing the workspace's agents as
-// conversations (or, for all workspaces, the workspaces), and the page.
+// The app shell around every page, laid out like a chat app: a sidebar
+// listing the workspaces, and under them the chosen workspace's agents as
+// conversations, beside the page.
 
-// nav is the shell's picker and sidebar.
+// nav is the shell's sidebar.
 type nav struct {
-	// Workspaces fill the picker; empty when only one workspace is served.
 	Workspaces []navLink
-	// AllHref is the all-workspaces view, "" when only one is served.
-	AllHref string
-	// Current names what the picker shows: a workspace, or "" for all.
-	Current  string
-	HomeHref string
-	OnHome   bool
-	// Items are the sidebar rows: agents, or workspaces on the all view.
-	Items []navLink
+	// Current is the chosen workspace; OnHome: its home is shown, not one
+	// of its agents.
+	Current string
+	OnHome  bool
+	Agents  []navLink
 }
 
 type navLink struct {
 	Name, Href string
-	// Dot colours the row's status; Badge counts what waits on the
+	// Dot colours the row's session; Badge counts what waits on the
 	// principal; Bold marks a session whose turn has ended.
 	Dot, State string
 	Badge      int
 	Bold       bool
-	Current    bool
-	// Sub is a dim note under the name (an agent's title).
-	Sub string
+	// Current: the page shown; Selected: the workspace of the agent shown.
+	Current, Selected bool
 }
 
-// pickerLinks lists every workspace for the picker.
-func (s *webServer) pickerLinks(current string, all bool) []navLink {
-	if s.src.FleetRoot == "" {
-		return nil
-	}
-	var out []navLink
-	for _, dir := range FleetDirs(s.src.FleetRoot) {
-		name := filepath.Base(dir)
-		out = append(out, navLink{Name: name, Href: link(all, "w", name), Current: name == current})
-	}
-	return out
+// fleetCache holds the workspace list for a while: every page shows it,
+// and scanning every workspace on each refresh would be slow.
+type fleetCache struct {
+	at    time.Time
+	all   bool
+	links []navLink
 }
+
+const fleetCacheFor = 20 * time.Second
 
 // workspaceNav is the shell for a workspace's pages; agent is the agent
 // shown, "" on the workspace's home.
 func (s *webServer) workspaceNav(ws *Workspace, agent string, all bool) *nav {
-	n := &nav{Workspaces: s.pickerLinks(ws.Name, all), Current: ws.Name, HomeHref: link(all, "w", ws.Name), OnHome: agent == ""}
-	if s.src.FleetRoot != "" {
-		n.AllHref = link(all)
+	n := &nav{Workspaces: s.workspaceLinks(ws, all), Current: ws.Name, OnHome: agent == ""}
+	if agent != "" {
+		for i := range n.Workspaces {
+			n.Workspaces[i].Selected, n.Workspaces[i].Current = n.Workspaces[i].Current, false
+		}
 	}
 	for _, a := range ws.Agents {
 		if a.Retired && !all && a.Name != agent {
 			continue
 		}
-		l := navLink{Name: a.Name, Href: link(all, "w", ws.Name, a.Name), Sub: a.Title, Current: a.Name == agent,
+		l := navLink{Name: a.Name, Href: link(all, "w", ws.Name, a.Name), Current: a.Name == agent,
 			Badge: len(a.ForPrincipal(ws.Principal)) + a.InboxUnprocessed}
 		l.Dot, l.State, l.Bold = sessionDot(a)
-		n.Items = append(n.Items, l)
+		n.Agents = append(n.Agents, l)
 	}
 	return n
 }
 
-// fleetNav is the shell for the all-workspaces view: the sidebar lists the
-// workspaces.
-func (s *webServer) fleetNav(f *Fleet, all bool) *nav {
-	n := &nav{Workspaces: s.pickerLinks("", all), AllHref: link(all), HomeHref: link(all), OnHome: true}
-	for _, ws := range f.Workspaces {
-		l := navLink{Name: ws.Name, Href: link(all, "w", ws.Name), Badge: ws.Counts().ForYou}
-		for _, a := range ws.Agents {
-			dot, _, bold := sessionDot(a)
-			l.Bold = l.Bold || bold
-			if dotRank[dot] > dotRank[l.Dot] {
-				l.Dot = dot
+// workspaceLinks lists every workspace served, with its most urgent
+// session and what waits on the principal there; the current one from its
+// fresh scan.
+func (s *webServer) workspaceLinks(current *Workspace, all bool) []navLink {
+	var links []navLink
+	if s.src.FleetRoot == "" {
+		links = []navLink{workspaceLink(current, all)}
+	} else {
+		s.fleetMu.Lock()
+		if c := s.fleet; c.links != nil && c.all == all && time.Since(c.at) < fleetCacheFor {
+			links = c.links
+		} else {
+			s.mu.Lock()
+			f, err := ScanFleet(s.src.FleetRoot, s.src.Options(all))
+			s.mu.Unlock()
+			if err == nil {
+				for _, ws := range f.Workspaces {
+					links = append(links, workspaceLink(ws, all))
+				}
+				s.fleet = fleetCache{at: time.Now(), all: all, links: links}
 			}
 		}
-		n.Items = append(n.Items, l)
+		s.fleetMu.Unlock()
 	}
-	return n
+	out := make([]navLink, 0, len(links))
+	for _, l := range links {
+		if l.Name == current.Name {
+			l = workspaceLink(current, all)
+			l.Current = true
+		}
+		out = append(out, l)
+	}
+	if len(out) == 0 {
+		out = append(out, workspaceLink(current, all))
+		out[0].Current = true
+	}
+	return out
+}
+
+func workspaceLink(ws *Workspace, all bool) navLink {
+	l := navLink{Name: ws.Name, Href: link(all, "w", ws.Name), Badge: ws.Counts().ForYou}
+	for _, a := range ws.Agents {
+		dot, _, bold := sessionDot(a)
+		l.Bold = l.Bold || bold
+		if dotRank[dot] > dotRank[l.Dot] {
+			l.Dot = dot
+		}
+	}
+	return l
 }
 
 // dotRank orders dots by urgency, for a workspace's most urgent agent.
