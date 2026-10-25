@@ -301,24 +301,26 @@ main.addEventListener("keydown", e => {
 {{end}}
 
 {{define "tracker"}}{{$href := .SessionHref}}
-<section><h3 class="foryou">Waiting on you</h3>
+<div class="info-cards">
+<section class="card card-foryou{{if not (or .Mine .Answered .Inbox)}} quiet{{end}}"><h3><span class="{{if or .Mine .Answered .Inbox}}foryou{{end}}">Waiting on you</span> <span class="n dim">{{len .Mine}}</span></h3>
 {{if or .Mine .Answered}}<ul class="items">{{range .Mine}}<li>{{template "item" .}}</li>{{end}}{{range .Answered}}<li>{{template "item" .}}</li>{{end}}</ul>{{else}}<p class="dim none">Nothing</p>{{end}}
 {{if .Inbox}}<p>{{.Inbox}} scheduled run(s) not yet read: start {{.Name}} to drain its inbox</p>{{end}}</section>
 
-{{if .ChatLive}}<section class="fold"><details data-key="plan"><summary><h3 class="plan">Plan from its last wrap</h3> <span class="dim">— {{len .Plan}} step(s); the session above may have moved on</span></summary>
+{{if .ChatLive}}<section class="card card-plan fold"><details data-key="plan"><summary><h3><span class="plan">Plan from its last wrap</span> <span class="n dim">{{len .Plan}}</span></h3><span class="dim sub">The session beside may have moved on</span></summary>
 {{template "plan" .Plan}}</details></section>
-{{else}}<section><h3 class="plan">Next session</h3>{{template "plan" .Plan}}</section>{{end}}
+{{else}}<section class="card card-plan"><h3><span class="plan">Next session</span> <span class="n dim">{{len .Plan}}</span></h3>{{template "plan" .Plan}}</section>{{end}}
 
-{{if .Others}}<section><h3 class="waiting">Waiting on others ◆</h3>{{template "section" .Others}}</section>{{end}}
-{{if .Blocked}}<section><h3 class="blocked">Blocked ■</h3>{{template "section" .Blocked}}</section>{{end}}
-<section><h3>Open actions <span class="dim">— P1 {{index .OpenCounts "P1"}} · P2 {{index .OpenCounts "P2"}} · P3 {{index .OpenCounts "P3"}}</span></h3>{{template "section" .Open}}</section>
-<section class="fold"><details data-key="parked"><summary><h3 class="dim">Parked — {{len .Parked}}</h3></summary>{{template "section" .Parked}}</details></section>
+{{if .Others}}<section class="card card-waiting"><h3><span class="waiting">Waiting on others ◆</span> <span class="n dim">{{len .Others}}</span></h3>{{template "section" .Others}}</section>{{end}}
+{{if .Blocked}}<section class="card card-blocked"><h3><span class="blocked">Blocked ■</span> <span class="n dim">{{len .Blocked}}</span></h3>{{template "section" .Blocked}}</section>{{end}}
+<section class="card"><h3><span>Open actions</span> <span class="n dim">P1 {{index .OpenCounts "P1"}} · P2 {{index .OpenCounts "P2"}} · P3 {{index .OpenCounts "P3"}}</span></h3>{{template "section" .Open}}</section>
+{{if .Parked}}<section class="card quiet fold"><details data-key="parked"><summary><h3><span class="dim">Parked</span> <span class="n dim">{{len .Parked}}</span></h3></summary>{{template "section" .Parked}}</details></section>{{end}}
 
-<section class="meta dim">
+<section class="card quiet meta">
 {{with .LastSession}}<p>Last session: {{if not .Date.IsZero}}{{.Date.Format "Mon 02 Jan"}} — {{end}}<a href="{{$href}}">{{.Title}}</a></p>{{end}}
 {{if .Health.Findings}}<p class="health-{{.Health.Level}}">Health {{.Health.Level.Symbol}}</p><ul>{{range .Health.Findings}}<li>{{.}}</li>{{end}}</ul>
-{{else}}<p>Health <span class="ok">✓</span> {{.HealthLine}}</p>{{end}}
+{{else}}<p class="dim">Health <span class="ok">✓</span> {{.HealthLine}}</p>{{end}}
 </section>
+</div>
 {{end}}
 
 {{define "plan"}}{{if .}}<ol class="plan-steps">{{range .}}<li>{{if .Priority}}<span class="pri">{{.Priority}}</span> {{end}}{{.Text}}</li>{{end}}</ol>{{else}}<p class="dim none">None</p>{{end}}{{end}}
