@@ -69,7 +69,7 @@ func TestWebFleetWorkspaceAgent(t *testing.T) {
 	}
 
 	_, body = get(t, h, "/w/alpha")
-	for _, want := range []string{"ALPHA", "Waiting on Norman", `href="/w/alpha/Sigrid"`, "#5", "Tidy memory and links", "» #3 ship the thing"} {
+	for _, want := range []string{"ALPHA", "Waiting on you", `href="/w/alpha/Sigrid"`, "#5", "Tidy memory and links", "» #3 ship the thing"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("workspace page lacks %q", want)
 		}
@@ -77,8 +77,8 @@ func TestWebFleetWorkspaceAgent(t *testing.T) {
 
 	_, body = get(t, h, "/w/alpha/Sigrid")
 	for _, want := range []string{
-		"Sigrid", "Lead", "Next session (agent's own plan)", "Waiting on Norman",
-		"Open actions — P1 1", "Parked — 1", "Shipped it",
+		"Sigrid", "Lead", "Next session", "Waiting on you",
+		`Open actions <span class="dim">— P1 1`, "Parked — 1", "Shipped it",
 		`href="/w/alpha/Sigrid/file?p=items%2F5-tidy-memory.md"`, // history note link
 		"Long detail | with a pipe",                              // the rest of the Action cell
 	} {
@@ -352,6 +352,17 @@ func TestWebSendTypesIntoTheLivePane(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(parent, "alpha/agents/Sigrid/memory/scheduled/inbox.md")); err == nil {
 		t.Error("a message goes to the pane, not the inbox")
 	}
+	// An item waiting on Norman takes a reply into the running session,
+	// named by its number, not an answer into the inbox.
+	if !strings.Contains(body, `class="answer reply" method="post" action="/w/alpha/Sigrid/send"`) || strings.Contains(body, `action="/w/alpha/Sigrid/answer"`) {
+		t.Errorf("a running agent's items want Reply, not Answer:\n%s", body)
+	}
+	if code, msg := post(t, h, "/w/alpha/Sigrid/send", url.Values{"id": {"5"}, "text": {"Yes, tidy it."}}, "X-GoAgentic", "1"); code != http.StatusNoContent || len(sent) != 2 || sent[1][1] != "Re #5: Yes, tidy it." {
+		t.Errorf("reply = %d %s, prompted %q", code, msg, sent)
+	}
+	if _, body := get(t, h, "/"); !strings.Contains(body, "your turn") || !strings.Contains(body, `href="/w/alpha/Sigrid">Sigrid</a> <a class="dim ws"`) {
+		t.Errorf("the fleet's Now lacks Sigrid's turn:\n%s", body)
+	}
 
 	for name, c := range map[string]struct {
 		src    WebSource
@@ -373,7 +384,7 @@ func TestWebSendTypesIntoTheLivePane(t *testing.T) {
 			t.Errorf("%s = %d, want %d (%s)", name, code, c.want, msg)
 		}
 	}
-	if len(sent) != 1 {
+	if len(sent) != 2 {
 		t.Errorf("a refused send must type nothing: %q", sent)
 	}
 
@@ -650,7 +661,7 @@ func TestWebWrapAndClose(t *testing.T) {
 	}
 	// Busy: the button is disabled and a forced post refused.
 	pane = claudePane("working", "s1")
-	if body := page(); !strings.Contains(body, `class="quiet" disabled>Wrap &amp; close`) || !strings.Contains(body, "Sigrid is busy") {
+	if body := page(); !strings.Contains(body, `class="quiet" disabled title="Sigrid is busy`) {
 		t.Errorf("busy agent: Wrap & close must be disabled:\n%s", body)
 	}
 	if code, _ := post(t, h, "/w/alpha/Sigrid/close", nil, "X-GoAgentic", "1"); code != http.StatusConflict || len(typed) != 0 {
@@ -708,5 +719,35 @@ func TestWebWrapAndClose(t *testing.T) {
 	}
 	if code, _ := post(t, h, "/w/alpha/Sigrid/close", nil); code != http.StatusForbidden {
 		t.Errorf("close without the header = %d", code)
+	}
+}
+
+func TestQueueRanksAcrossAgents(t *testing.T) {
+	day := func(d int) *time.Time { t := now.AddDate(0, 0, d); return &t }
+	line := func(name, pri string, due *time.Time, rank int) queueLine {
+		it := webItem{Item: Item{ID: name, Priority: pri, Due: due}}
+		l := queueLine{Agent: name, Item: &it, pri: min(priorityRank(pri), 4)}
+		l.rank = l.pri
+		if rank >= 0 {
+			l.rank = rank
+		}
+		return l
+	}
+	q := makeQueue([]queueLine{
+		line("answered", "P1", nil, 6),
+		line("p3", "P3", nil, -1),
+		line("p1-later", "P1", day(5), -1),
+		line("late-p2", "P2", day(-3), 0),
+		line("none", "", nil, -1),
+		line("p1-soon", "P1", day(1), -1),
+		line("late-p1", "P1", day(-1), 0),
+	}, 3, true)
+	var got []string
+	for _, l := range append(q.Top, q.More...) {
+		got = append(got, l.Agent)
+	}
+	want := "late-p1 late-p2 p1-soon p1-later p3 none answered"
+	if strings.Join(got, " ") != want || len(q.Top) != 3 || q.Total != 6 || !q.Top[0].ShowWs {
+		t.Errorf("queue = %v (top %d, total %d), want %s", got, len(q.Top), q.Total, want)
 	}
 }

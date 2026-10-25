@@ -187,6 +187,10 @@ type page struct {
 	Live    bool
 	Counts  *Counts
 	First   string
+	// Now and Queue lead the fleet and workspace pages: the running
+	// sessions, and what waits on the principal, ranked (web_views.go).
+	Now   []nowLine
+	Queue *queueView
 
 	Fleet     []fleetRow
 	Workspace *webWorkspace
@@ -202,38 +206,34 @@ type fleetRow struct {
 }
 
 type webWorkspace struct {
-	Waiting []waitingLine
-	Rows    []agentRow
-}
-
-type waitingLine struct {
-	Agent, AgentHref string
-	// First marks the agent's first line, the only one that names it.
-	First bool
-	Item  *webItem
-	// Text is set instead of Item for unread scheduled runs.
-	Text string
+	Rows []agentRow
 }
 
 type agentRow struct {
 	Row
 	Href, Tone, LiveClass string
 	NextP1                bool
+	// OnYou counts what waits on the principal: items and unread runs.
+	OnYou int
 }
 
 type webAgent struct {
 	Name, Title string
 	Facts       []string
-	Plan        []PlanStep
-	Mine        []webItem
-	Answered    []webItem
-	Inbox       int
-	Others      []webItem
-	Blocked     []webItem
-	Open        []webItem
-	OpenCounts  map[string]int
-	Parked      []webItem
-	LastSession *Session
+	// Active: a session is running or starting, so the page leads with the
+	// chat; otherwise with the tracker. State says what the session does.
+	Active            bool
+	State, StateClass string
+	Plan              []PlanStep
+	Mine              []webItem
+	Answered          []webItem
+	Inbox             int
+	Others            []webItem
+	Blocked           []webItem
+	Open              []webItem
+	OpenCounts        map[string]int
+	Parked            []webItem
+	LastSession       *Session
 	// Chat is the running session as a conversation, read only while
 	// ChatLive (the agent is running in a pane). A stopped agent shows no
 	// chat, only when its last session ended (LastEnded).
@@ -293,6 +293,12 @@ type webItem struct {
 	Answers   []Answer
 	Agent     string
 	AgentLive bool
+	// Late: past its due date.
+	Late bool
+	// Reply: the agent's own session is running, so an answer is typed into
+	// it (SendURL) instead of its inbox, and it sees it now.
+	Reply   bool
+	SendURL string
 }
 
 type webFile struct {
@@ -324,8 +330,11 @@ func (s *webServer) home(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	c := f.Counts()
-	p := page{Title: "Fleet", Heading: "FLEET", All: all, Scanned: f.Scanned, Live: f.Live, Counts: &c}
+	p := page{Title: "Fleet", Heading: "FLEET", All: all, Scanned: f.Scanned, Live: f.Live, Counts: &c, First: "you"}
+	var queue []queueLine
 	for _, ws := range f.Workspaces {
+		p.Now = append(p.Now, s.nowLines(ws, all)...)
+		queue = append(queue, queueLines(ws, all)...)
 		live := "–"
 		if ws.Live {
 			live = fmt.Sprint(ws.Counts().Live)
@@ -335,6 +344,8 @@ func (s *webServer) home(w http.ResponseWriter, r *http.Request) {
 			Live: live, NeedsYou: NeedsYou(ws), Counts: ws.Counts(),
 		})
 	}
+	sortNow(p.Now)
+	p.Queue = makeQueue(queue, 10, true)
 	s.render(w, r, p)
 }
 
@@ -390,25 +401,15 @@ func (s *webServer) workspace(w http.ResponseWriter, r *http.Request) {
 	p := page{
 		Title: ws.Name, Heading: strings.ToUpper(ws.Name), Crumbs: s.crumbs(all, ws.Name), All: all, Scanned: ws.Scanned, Live: ws.Live,
 		Counts: &c, First: firstName(ws.Principal), Workspace: &webWorkspace{},
+		Now: s.nowLines(ws, all),
 	}
+	sortNow(p.Now)
+	p.Queue = makeQueue(queueLines(ws, all), 8, false)
 	for _, a := range ws.Agents {
-		href := link(all, "w", ws.Name, a.Name)
-		start := len(p.Workspace.Waiting)
-		for _, it := range append(a.ForPrincipal(ws.Principal), a.AnsweredItems(ws.Principal)...) {
-			wi := makeWebItem(ws, a, it, all)
-			p.Workspace.Waiting = append(p.Workspace.Waiting, waitingLine{Agent: a.Name, AgentHref: href, Item: &wi})
-		}
-		if a.InboxUnprocessed > 0 {
-			p.Workspace.Waiting = append(p.Workspace.Waiting, waitingLine{Agent: a.Name, AgentHref: href,
-				Text: fmt.Sprintf("%d scheduled run(s) not yet read", a.InboxUnprocessed)})
-		}
-		if len(p.Workspace.Waiting) > start {
-			p.Workspace.Waiting[start].First = true
-		}
 		row := MakeRow(ws, a)
 		p.Workspace.Rows = append(p.Workspace.Rows, agentRow{
-			Row: row, Href: href, Tone: toneClass(agentTone(ws, a)), LiveClass: liveClass(row.Live),
-			NextP1: strings.HasPrefix(row.Next, "P1 "),
+			Row: row, Href: link(all, "w", ws.Name, a.Name), Tone: toneClass(agentTone(ws, a)), LiveClass: liveClass(row.Live),
+			NextP1: strings.HasPrefix(row.Next, "P1 "), OnYou: len(a.ForPrincipal(ws.Principal)) + a.InboxUnprocessed,
 		})
 	}
 	s.render(w, r, p)
@@ -467,11 +468,42 @@ func (s *webServer) agent(w http.ResponseWriter, r *http.Request) {
 		wa.LastSession = &last
 		wa.SessionHref = fileLink(ws, a, filepath.Join("memory", "sessions", last.File), all)
 	}
-	c := ws.Counts()
+	wa.Active = wa.ChatLive || wa.Loading || wa.Prompt
+	if wa.Loading || wa.Prompt || wa.Wrapping {
+		// Not taking messages: answers go to the inbox.
+		for _, list := range [][]webItem{wa.Mine, wa.Answered} {
+			for i := range list {
+				list[i].Reply = false
+			}
+		}
+	}
+	wa.State, wa.StateClass = agentState(a, wa)
+	// No count header: the workspace's counts are not this agent's.
 	s.render(w, r, page{
-		Title: a.Name + " · " + ws.Name, Heading: strings.ToUpper(ws.Name), Crumbs: s.crumbs(all, ws.Name, crumb{a.Name, link(all, "w", ws.Name, a.Name)}),
-		All: all, Scanned: ws.Scanned, Live: ws.Live, Counts: &c, First: firstName(ws.Principal), Agent: wa,
+		Title: a.Name + " · " + ws.Name, Crumbs: s.crumbs(all, ws.Name, crumb{a.Name, link(all, "w", ws.Name, a.Name)}),
+		All: all, Scanned: ws.Scanned, Live: ws.Live, First: firstName(ws.Principal), Agent: wa,
 	})
+}
+
+// agentState is the agent page's one word on its session.
+func agentState(a *Agent, wa *webAgent) (string, string) {
+	switch {
+	case wa.Wrapping:
+		return "wrapping up", "accent"
+	case wa.Loading:
+		return "starting", "accent"
+	case wa.Prompt:
+		return "prompt in its pane", "blocked"
+	case !wa.ChatLive:
+		return "not running", "dim"
+	case !sessionPane(a.Live):
+		return "peer or task pane", "dim"
+	case a.Live.Status == "working":
+		return "working", "ok"
+	case settled(a.Live):
+		return "your turn", "foryou"
+	}
+	return a.Live.State(), "dim"
 }
 
 // file shows one Markdown file from the agent's own folder: an item's
@@ -546,6 +578,9 @@ func (s *webServer) send(w http.ResponseWriter, r *http.Request) {
 	case text == "":
 		http.Error(w, "nothing to send", http.StatusBadRequest)
 		return
+	case r.FormValue("id") != "":
+		// A reply to an item, from its Reply box: say which.
+		text = "Re #" + strings.TrimPrefix(r.FormValue("id"), "#") + ": " + text
 	case len(text) > maxAnswer:
 		http.Error(w, fmt.Sprintf("message longer than %d characters", maxAnswer), http.StatusBadRequest)
 		return
@@ -581,25 +616,9 @@ func stopped(ws *Workspace, a *Agent, wa *webAgent) {
 // was one), so an earlier session never shows as this one. A session still
 // on its start-up turn shows loading.
 func (s *webServer) readChat(ws *Workspace, a *Agent, wa *webAgent) {
-	path := ""
-	switch {
-	case a.Live.ClaudeSession() != "":
-		dir := filepath.Dir(a.Transcript)
-		if a.Transcript == "" {
-			dir = filepath.Join(s.src.Options(true).Transcripts, projectDirName(ws.Root))
-		}
-		path = filepath.Join(dir, a.Live.ClaudeSession()+".jsonl")
-	case a.Live.Agent == "codex":
-		home := s.src.CodexHome
-		if home == "" {
-			home = CodexHome()
-		}
-		// A session that began before this page's Start is an earlier one.
-		path = CodexSession(home, ws.Root, a.Name, s.launchedAt(ws, a).Add(-30*time.Second))
-	case a.Live.Agent == "claude":
-		path = a.Transcript // a Herdr too old to name the session
-	default:
-		wa.ChatNote = a.Name + " runs in " + a.Live.Agent + "; the chat reads Claude Code and codex sessions only."
+	path, ok, note := s.chatPath(ws, a)
+	if !ok {
+		wa.ChatNote = note
 		return
 	}
 	wa.readable = true
@@ -632,6 +651,29 @@ func (s *webServer) readChat(ws *Workspace, a *Agent, wa *webAgent) {
 	if !replied && len(entries) > 0 && isStartText(entries[0].Text) && !settled(a.Live) {
 		wa.Loading, wa.LoadingText = true, "Starting "+a.Name+"…"
 	}
+}
+
+// chatPath is the session file of the agent's running session, "" while it
+// is not written yet; ok is false for a CLI the chat cannot read, with why.
+func (s *webServer) chatPath(ws *Workspace, a *Agent) (path string, ok bool, note string) {
+	switch {
+	case a.Live.ClaudeSession() != "":
+		dir := filepath.Dir(a.Transcript)
+		if a.Transcript == "" {
+			dir = filepath.Join(s.src.Options(true).Transcripts, projectDirName(ws.Root))
+		}
+		return filepath.Join(dir, a.Live.ClaudeSession()+".jsonl"), true, ""
+	case a.Live.Agent == "codex":
+		home := s.src.CodexHome
+		if home == "" {
+			home = CodexHome()
+		}
+		// A session that began before this page's Start is an earlier one.
+		return CodexSession(home, ws.Root, a.Name, s.launchedAt(ws, a).Add(-30*time.Second)), true, ""
+	case a.Live.Agent == "claude":
+		return a.Transcript, true, "" // a Herdr too old to name the session
+	}
+	return "", false, a.Name + " runs in " + a.Live.Agent + "; the chat reads Claude Code and codex sessions only."
 }
 
 // launchedAt is when this page last started the agent, or zero.
@@ -940,6 +982,10 @@ func makeWebItem(ws *Workspace, a *Agent, it Item, all bool) webItem {
 		CanAnswer: waitsOnPrincipal(it, ws.Principal), Answers: a.Answers[id],
 		AnswerURL: "/w/" + ws.Name + "/" + a.Name + "/answer",
 		Agent:     a.Name, AgentLive: a.Live != nil && a.Live.Running,
+	}
+	wi.Late = it.Overdue(ws.Scanned)
+	if ok, _ := canSend(a); ok && wi.CanAnswer {
+		wi.Reply, wi.SendURL = true, "/w/"+ws.Name+"/"+a.Name+"/send"
 	}
 	if detail := strings.TrimSpace(strings.TrimPrefix(cleanMarkdown(it.Action), wi.Headline)); detail != "" && detail != wi.Headline {
 		wi.Detail = strings.TrimSpace(strings.TrimLeft(detail, "—–-.: "))

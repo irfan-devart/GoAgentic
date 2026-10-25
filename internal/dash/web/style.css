@@ -53,11 +53,9 @@ td.needs { color: var(--foryou); }
 .dot.foryou { background: var(--foryou); } .dot.working { background: var(--ok); }
 .legend { font-size: 12px; margin-top: 10px; }
 .legend .dot { margin-left: 10px; }
-.waiting-you { margin-top: 14px; }
 ul.items { list-style: none; margin: 0; padding: 0; }
 ul.items > li { padding: 3px 0; display: flex; gap: 8px; align-items: baseline; }
 ul.items .who { min-width: 80px; }
-.waiting-you li.first:not(:first-child) { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 7px; }
 details.item { flex: 1; }
 details.item summary { cursor: pointer; list-style: none; }
 details.item summary::-webkit-details-marker { display: none; }
@@ -68,7 +66,7 @@ details.item[open] summary .headline { font-weight: 600; }
 .id { color: var(--dim); font-variant-numeric: tabular-nums; }
 .none { margin: 0; }
 .facts { margin: 2px 0 0; font-size: 13px; }
-.agent-name { font-size: 18px; color: var(--title); margin-top: 14px; }
+.agent-name { font-size: 18px; color: var(--title); display: inline; letter-spacing: 0; }
 .plan-steps { margin: 0; padding-left: 22px; }
 .parked summary { cursor: pointer; }
 .parked summary h3 { display: inline; }
@@ -95,16 +93,7 @@ form.answer button:disabled { opacity: .5; cursor: default; }
 form.answer .status { color: var(--dim); font-size: 13px; }
 form.answer .status.error { color: var(--blocked); }
 .hint { font-size: 12px; }
-.agent-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0 32px; }
-@media (min-width: 1100px) {
-  main:has(.agent-grid) { max-width: 1600px; }
-  .agent-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); }
-  .chat-pane { position: sticky; top: 12px; align-self: start; }
-  .chat { height: calc(100vh - 150px); }
-}
-.chat-pane h3 { margin-top: 18px; }
-.chat { overflow-y: auto; max-height: 75vh; border: 1px solid var(--line); border-radius: 8px; padding: 10px; background: var(--hover); display: flex; flex-direction: column; gap: 8px; }
-@media (min-width: 1100px) { .chat { max-height: none; } }
+.chat { overflow-y: auto; max-height: 70vh; min-height: 200px; border: 1px solid var(--line); border-radius: 8px; padding: 10px; background: var(--hover); display: flex; flex-direction: column; gap: 8px; }
 .msg { display: flex; flex-direction: column; max-width: 92%; }
 .msg.you { align-self: flex-end; align-items: flex-end; }
 .msg.agent { align-self: flex-start; }
@@ -124,3 +113,56 @@ form.send { max-width: none; }
 .loading p { margin: 6px 0 0; font-size: 13px; }
 .spin { display: inline-block; width: 1.2em; color: var(--accent); font-family: ui-monospace, monospace; }
 .ended { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--hover); margin: 0 0 4px; }
+
+/* Now and the queue lead the fleet and workspace pages. */
+section.now, section.queue { margin-top: 14px; }
+table.now { margin-top: 4px; }
+table.now td { border-bottom: 1px solid var(--line); }
+table.now td.who { white-space: nowrap; width: 1%; padding-left: 0; }
+table.now td.st { white-space: nowrap; width: 1%; }
+table.now td.last { overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  /* A phone: the agent's last words go on their own line. */
+  table.now tr { display: grid; grid-template-columns: auto 1fr; border-bottom: 1px solid var(--line); }
+  table.now td { border-bottom: 0; width: auto; padding: 4px 8px 0 0; }
+  table.now td.last { grid-column: 1 / -1; padding: 0 0 6px; }
+}
+table.now tr.foryou td.st, table.now tr.blocked td.st { font-weight: 600; }
+.ws { font-size: 12px; margin-left: 4px; }
+.state { font-size: 13px; }
+ul.items.queue > li { border-bottom: 1px solid var(--line); padding: 5px 0; }
+ul.items.queue .who { min-width: 90px; }
+ul.items.queue.fleet .who { min-width: 170px; }
+.more-queue > summary { cursor: pointer; padding: 6px 0; }
+.answer-hint.reply { color: var(--ok); }
+
+/* The agent page: its name and what its session is doing, then the
+   conversation first while it runs, the tracker first while it does not. */
+.agent-head { margin: 10px 0 4px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; }
+.agent-head .facts { flex-basis: 100%; }
+.agent-head .state { font-size: 14px; font-weight: 600; }
+.agent-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px 32px; }
+.session-card { margin: 10px 0 0; max-width: 820px; }
+.agent-grid:not(.live) { max-width: 980px; }
+.chat-pane { margin-top: 8px; display: flex; flex-direction: column; min-width: 0; }
+.composer { margin-top: 6px; }
+.agent-head form.close { margin: 0 0 0 auto; display: flex; gap: 10px; align-items: center; }
+.agent-head form.close .status { font-size: 13px; }
+section.fold > details > summary { cursor: pointer; list-style: none; }
+section.fold > details > summary::-webkit-details-marker { display: none; }
+section.fold summary h3 { display: inline; }
+section.fold { margin-top: 18px; }
+section.fold h3 { margin: 0; }
+section.meta { margin-top: 22px; font-size: 13px; border-top: 1px solid var(--line); padding-top: 6px; }
+section.meta p { margin: 2px 0; }
+section.meta ul { margin: 2px 0; padding-left: 18px; }
+/* Wide screens: a running agent's page fills the window; the chat and the
+   tracker scroll on their own, and the message box stays in view. */
+@media (min-width: 1100px) {
+  main:has(.agent-grid.live) { max-width: 1600px; height: 100vh; display: flex; flex-direction: column; padding-bottom: 8px; }
+  main:has(.agent-grid.live) footer { margin-top: 6px; }
+  .agent-grid.live { flex: 1; min-height: 0; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); }
+  .agent-grid.live > .detail { overflow-y: auto; min-height: 0; padding-right: 6px; }
+  .agent-grid.live > .chat-pane { min-height: 0; }
+  .agent-grid.live .chat { flex: 1; min-height: 0; max-height: none; }
+}

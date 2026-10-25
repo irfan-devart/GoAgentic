@@ -94,11 +94,13 @@ main.addEventListener("keydown", e => {
 {{define "main"}}
 <nav class="crumbs">{{range $i, $c := .Crumbs}}{{if $i}}<span class="dim"> › </span>{{end}}{{if $c.Href}}<a href="{{$c.Href}}">{{$c.Name}}</a>{{else}}<span>{{$c.Name}}</span>{{end}}{{end}}</nav>
 {{if .Counts}}{{template "counts" .}}{{end}}
+{{if .Now}}{{template "now" .}}{{end}}
+{{if .Queue}}{{template "queue" .Queue}}{{end}}
 {{if .Fleet}}{{template "fleet" .}}{{end}}
 {{if .Workspace}}{{template "workspace" .}}{{end}}
 {{if .Agent}}{{template "agent" .}}{{end}}
 {{with .File}}<h2>{{.Name}}</h2><pre class="file">{{.Text}}</pre>{{end}}
-<footer class="dim">Answers go to the agent's inbox, messages to its live pane; Start opens it in Herdr; trackers are never edited · refreshes every 5 s · scanned {{.Scanned.Format "15:04:05"}} ·
+<footer class="dim">Answer: into a stopped agent's inbox, read at its next start · Reply and messages: typed into a running agent's session · Start opens it in Herdr · trackers are never edited · refreshes every 5 s · scanned {{.Scanned.Format "15:04:05"}} ·
 {{if .All}}<a href="?">hide retired</a>{{else}}<a href="?all=1">show retired</a>{{end}}</footer>
 {{end}}
 
@@ -106,8 +108,8 @@ main.addEventListener("keydown", e => {
 <header class="counts">
   <h1>{{.Heading}}</h1>
   <ul>
-    {{if .Live}}<li class="{{if $c.Live}}ok{{else}}dim{{end}}">● {{$c.Live}} live</li>{{end}}
-    <li class="{{if $c.ForYou}}foryou{{else}}dim{{end}}">✋ {{$c.ForYou}} for you</li>
+    {{if .Live}}<li class="{{if $c.Live}}ok{{else}}dim{{end}}">● {{$c.Live}} running</li>{{end}}
+    <li class="{{if $c.ForYou}}foryou{{else}}dim{{end}}">✋ {{$c.ForYou}} waiting on you</li>
     <li class="{{if $c.Overdue}}blocked{{else}}dim{{end}}">⚑ {{$c.Overdue}} overdue</li>
     <li class="{{if $c.Waiting}}waiting{{else}}dim{{end}}">◆ {{$c.Waiting}} P1 waiting on others</li>
     <li class="{{if $c.Blocked}}blocked{{else}}dim{{end}}">■ {{$c.Blocked}} blocked</li>
@@ -116,13 +118,39 @@ main.addEventListener("keydown", e => {
 </header>
 {{end}}
 
+{{define "state"}}<span class="state {{.Class}}">{{if .Working}}<span class="spin" aria-hidden="true">⠋</span> {{end}}{{.State}}</span>{{end}}
+
+{{define "now"}}{{$fleet := .Fleet}}
+<section class="now"><h2>Now <span class="dim">— sessions running in a pane</span></h2>
+<div class="scroll"><table class="now">
+<tbody>
+{{range .Now}}<tr class="{{.Class}}">
+  <td class="who"><a href="{{.Href}}">{{.Agent}}</a>{{if $fleet}} <a class="dim ws" href="{{.WsHref}}">{{.Workspace}}</a>{{end}}</td>
+  <td class="st">{{template "state" .}}</td>
+  <td class="last dim">{{.Last}}</td>
+</tr>{{end}}
+</tbody></table></div>
+</section>
+{{end}}
+
+{{define "queue"}}
+<section class="queue"><h2 class="foryou">Waiting on you <span class="dim">— {{.Total}}, most urgent first</span></h2>
+{{if .Top}}<ul class="items queue{{if .Fleet}} fleet{{end}}">{{range .Top}}{{template "qline" .}}{{end}}</ul>
+{{with .More}}<details class="more-queue" data-key="queue-more"><summary class="dim">{{len .}} more</summary><ul class="items queue{{if $.Fleet}} fleet{{end}}">{{range .}}{{template "qline" .}}{{end}}</ul></details>{{end}}
+{{else}}<p class="dim none">Nothing waiting on you.</p>{{end}}
+</section>
+{{end}}
+
+{{define "qline"}}<li><span class="who"><a href="{{.AgentHref}}">{{.Agent}}</a>{{if .ShowWs}} <a class="dim ws" href="{{.WsHref}}">{{.Workspace}}</a>{{end}}</span> {{if .Item}}{{template "item" .Item}}{{else}}<span>{{.Text}}</span>{{end}}</li>{{end}}
+
 {{define "legend"}}
 <p class="legend dim"><span class="dot blocked"></span> blocked <span class="dot waiting"></span> P1 waiting on others <span class="dot foryou"></span> waiting on you <span class="dot working"></span> working · no dot: nothing to act on</p>
 {{end}}
 
 {{define "fleet"}}
+<h2>Workspaces</h2>
 <div class="scroll"><table>
-<thead><tr><th></th><th>Workspace</th><th class="n">Agents</th><th class="n">Live</th><th class="n">For you</th><th class="n">Overdue</th><th class="n">Waiting</th><th class="n">Blocked</th><th class="n">Health</th><th>Needs you</th></tr></thead>
+<thead><tr><th></th><th>Workspace</th><th class="n">Agents</th><th class="n">Running</th><th class="n">On you</th><th class="n">Overdue</th><th class="n">Waiting</th><th class="n">Blocked</th><th class="n">Health</th><th>Waiting on you, by agent</th></tr></thead>
 <tbody>
 {{range .Fleet}}<tr>
   <td><span class="dot {{.Tone}}"></span></td>
@@ -140,20 +168,18 @@ main.addEventListener("keydown", e => {
 {{template "legend"}}
 {{end}}
 
-{{define "workspace"}}{{$first := .First}}
+{{define "workspace"}}
 {{with .Workspace}}
-{{if .Waiting}}<section class="waiting-you">
-<h2 class="foryou">Waiting on {{$first}}</h2>
-<ul class="items">{{range .Waiting}}<li{{if .First}} class="first"{{end}}><span class="who">{{if .First}}<a href="{{.AgentHref}}">{{.Agent}}</a>{{end}}</span> {{if .Item}}{{template "item" .Item}}{{else}}<span>{{.Text}}</span>{{end}}</li>{{end}}</ul>
-</section>{{end}}
+<h2>Agents</h2>
 <div class="scroll"><table>
-<thead><tr><th></th><th>Agent</th><th>Harness</th><th>Live</th><th>Started</th><th>Health</th><th>Next up</th></tr></thead>
+<thead><tr><th></th><th>Agent</th><th>Harness</th><th>Session</th><th class="n">On you</th><th>Started</th><th>Health</th><th>Next up</th></tr></thead>
 <tbody>
 {{range .Rows}}<tr>
   <td><span class="dot {{.Tone}}"></span></td>
   <td><a href="{{.Href}}">{{.Agent}}</a></td>
   <td class="dim">{{.Harness}}</td>
   <td class="{{.LiveClass}}">{{.Live}}</td>
+  <td class="n {{if .OnYou}}foryou{{else}}dim{{end}}">{{.OnYou}}</td>
   <td class="dim">{{.Started}}</td>
   <td class="health-{{.Level}}">{{.Health}}</td>
   <td class="next">{{.Next}}{{if .NextBlocked}} <span class="blocked">■ blocked</span>{{else if .NextWaiting}} <span class="{{if .NextP1}}waiting{{else}}dim{{end}}">◆ waiting</span>{{end}}</td>
@@ -164,51 +190,68 @@ main.addEventListener("keydown", e => {
 {{end}}
 
 {{define "item"}}<details class="item{{if .Answers}} answered{{end}}" data-key="{{.Key}}">
-<summary>{{if .Priority}}<span class="pri">{{.Priority}}</span> {{end}}<span class="id">#{{trimHash .ID}}</span> <span class="headline">{{.Headline}}</span>{{if .Note}} <span class="dim">{{.Note}}</span>{{end}}{{if .Answers}} <span class="ok tag">✓ answered, waiting on {{.Agent}}</span>{{else if .CanAnswer}} <span class="answer-hint">Answer</span>{{end}}</summary>
+<summary>{{if .Priority}}<span class="pri">{{.Priority}}</span> {{end}}<span class="id">#{{trimHash .ID}}</span> <span class="headline">{{.Headline}}</span>{{if .Late}} <span class="blocked tag">⚑ overdue</span>{{else if .Due}} <span class="dim tag">due {{.Due.Format "Mon 02 Jan"}}</span>{{end}}{{if .Note}} <span class="dim">{{.Note}}</span>{{end}}{{if .Answers}} <span class="ok tag">✓ answered, waiting on {{.Agent}}</span>{{else if .Reply}} <span class="answer-hint reply">Reply</span>{{else if .CanAnswer}} <span class="answer-hint">Answer</span>{{end}}</summary>
 <div class="more">
   {{if .Detail}}<p>{{.Detail}}</p>{{end}}
   <p class="dim">{{if .Owner}}Owner {{.Owner}}{{end}}{{if .Status}} · {{.Status}}{{end}}{{if .Due}} · due {{.Due.Format "2006-01-02"}}{{end}}</p>
   {{if .History}}<p><a href="{{.History}}">History note →</a></p>{{end}}
   {{range .Answers}}<blockquote class="given"><span class="dim">You, {{.At.Format "Mon 15:04"}}:</span> {{.Text}}</blockquote>{{end}}
-  {{if .Answers}}<p class="dim">{{.Agent}} picks this up at its next start{{if .AgentLive}}. It is open in a pane now, so it will not see this until it restarts, or tell it there{{end}}.</p>{{end}}
-  {{if .CanAnswer}}<form class="answer" method="post" action="{{.AnswerURL}}">
+  {{if .Answers}}<p class="dim">{{.Agent}} picks this up at its next start{{if .AgentLive}}. It is running now, so it will not see this until it restarts; reply in its chat to reach it now{{end}}.</p>{{end}}
+  {{if .Reply}}<form class="answer reply" method="post" action="{{.SendURL}}">
+    <input type="hidden" name="id" value="{{trimHash .ID}}">
+    <textarea name="text" rows="3" maxlength="4000" placeholder="Your reply to {{.Agent}}" aria-label="Reply on #{{trimHash .ID}}"></textarea>
+    <div class="row"><button type="submit">Reply now</button> <span class="dim hint">{{.Agent}} is running: typed into its session as “Re #{{trimHash .ID}}: …” · ⌘/Ctrl-Enter</span> <span class="status"></span></div>
+  </form>{{else if .CanAnswer}}<form class="answer" method="post" action="{{.AnswerURL}}">
     <input type="hidden" name="id" value="{{trimHash .ID}}">
     <textarea name="text" rows="3" maxlength="4000" placeholder="{{if .Answers}}Add to your answer{{else}}Your answer to {{.Agent}}{{end}}" aria-label="Answer #{{trimHash .ID}}"></textarea>
-    <div class="row"><button type="submit">Send to {{.Agent}}</button> <span class="dim hint">⌘/Ctrl-Enter</span> <span class="status"></span></div>
+    <div class="row"><button type="submit">Send answer</button> <span class="dim hint">Goes to {{.Agent}}'s inbox; it reads it at its next start · ⌘/Ctrl-Enter</span> <span class="status"></span></div>
   </form>{{end}}
 </div>
 </details>{{end}}
 
 {{define "section"}}{{/* . is a list of webItem */}}{{if .}}<ul class="items">{{range .}}<li>{{template "item" .}}</li>{{end}}</ul>{{else}}<p class="dim none">None</p>{{end}}{{end}}
 
-{{define "agent"}}{{$first := .First}}
+{{define "agent"}}
 {{with .Agent}}
-<div class="agent-grid"><div class="detail">
-<h2 class="agent-name">{{.Name}}{{if .Title}} <span class="dim">— {{.Title}}</span>{{end}}</h2>
+<header class="agent-head">
+<h1 class="agent-name">{{.Name}}{{if .Title}} <span class="dim">— {{.Title}}</span>{{end}}</h1>
+<span class="state {{.StateClass}}">{{if or (eq .State "working") (eq .State "starting") (eq .State "wrapping up")}}<span class="spin" aria-hidden="true">⠋</span> {{end}}{{.State}}</span>
+{{if and .CloseURL (not .WrapStopped) (not .Wrapping)}}<form class="answer close" method="post" action="{{.CloseURL}}">
+  <span class="status{{if .CloseError}} error{{end}}">{{.CloseError}}</span> <button type="submit" class="quiet"{{if .Busy}} disabled title="{{.Name}} is busy — wrap when it has finished"{{else}} title="Runs its wrap, then closes the pane"{{end}}>Wrap &amp; close</button>
+</form>{{end}}
 <p class="dim facts">{{range $i, $f := .Facts}}{{if $i}} · {{end}}{{$f}}{{end}}</p>
-
-<section><h3 class="plan">Next session (agent's own plan)</h3>
-{{if .Plan}}<ol class="plan-steps">{{range .Plan}}<li>{{if .Priority}}<span class="pri">{{.Priority}}</span> {{end}}{{.Text}}</li>{{end}}</ol>{{else}}<p class="dim none">None</p>{{end}}</section>
-
-<section><h3 class="foryou">Waiting on {{$first}}</h3>
-{{if or .Mine .Answered}}<ul class="items">{{range .Mine}}<li>{{template "item" .}}</li>{{end}}{{range .Answered}}<li>{{template "item" .}}</li>{{end}}</ul>{{else}}<p class="dim none">None</p>{{end}}
-{{if .Inbox}}<p>{{.Inbox}} scheduled run(s) not yet read — start the agent to drain its inbox</p>{{end}}</section>
-
-<section><h3 class="waiting">Waiting on others ◆</h3>{{template "section" .Others}}</section>
-<section><h3 class="blocked">Blocked ■</h3>{{template "section" .Blocked}}</section>
-<section><h3>Open actions — P1 {{index .OpenCounts "P1"}} · P2 {{index .OpenCounts "P2"}} · P3 {{index .OpenCounts "P3"}}</h3>{{template "section" .Open}}</section>
-<section class="parked"><details data-key="parked"><summary><h3 class="dim">Parked — {{len .Parked}}</h3></summary>{{template "section" .Parked}}</details></section>
-
-{{with .LastSession}}<section><h3>Last session</h3>
-<p>{{if not .Date.IsZero}}{{.Date.Format "Mon 02 Jan"}} — {{end}}<a href="{{$.Agent.SessionHref}}">{{.Title}}</a></p>
-{{if .Summary}}<p class="dim">{{.Summary}}</p>{{end}}</section>{{end}}
-
-<section>{{if .Health.Findings}}<h3 class="health-{{.Health.Level}}">Health {{.Health.Level.Symbol}}</h3>
-<ul>{{range .Health.Findings}}<li>{{.}}</li>{{end}}</ul>
-{{else}}<h3 class="ok">Health ✓ <span class="dim">{{.HealthLine}}</span></h3>{{end}}</section>
+</header>
+<div class="agent-grid{{if .Active}} live{{end}}">
+<section class="{{if .Active}}chat-pane{{else}}session-card{{end}}">{{template "session" .}}</section>
+<div class="detail">{{template "tracker" .}}</div>
 </div>
-<aside class="chat-pane">
-<h3>Session {{if .Loading}}<span class="accent">— starting</span>{{else if .Prompt}}<span class="foryou">— waiting on a prompt</span>{{else if .ChatLive}}<span class="ok">● live</span>{{else}}<span class="dim">— not running</span>{{end}}</h3>
+{{end}}
+{{end}}
+
+{{define "tracker"}}{{$href := .SessionHref}}
+<section><h3 class="foryou">Waiting on you</h3>
+{{if or .Mine .Answered}}<ul class="items">{{range .Mine}}<li>{{template "item" .}}</li>{{end}}{{range .Answered}}<li>{{template "item" .}}</li>{{end}}</ul>{{else}}<p class="dim none">Nothing</p>{{end}}
+{{if .Inbox}}<p>{{.Inbox}} scheduled run(s) not yet read: start {{.Name}} to drain its inbox</p>{{end}}</section>
+
+{{if .ChatLive}}<section class="fold"><details data-key="plan"><summary><h3 class="plan">Plan from its last wrap</h3> <span class="dim">— {{len .Plan}} step(s); the session above may have moved on</span></summary>
+{{template "plan" .Plan}}</details></section>
+{{else}}<section><h3 class="plan">Next session</h3>{{template "plan" .Plan}}</section>{{end}}
+
+{{if .Others}}<section><h3 class="waiting">Waiting on others ◆</h3>{{template "section" .Others}}</section>{{end}}
+{{if .Blocked}}<section><h3 class="blocked">Blocked ■</h3>{{template "section" .Blocked}}</section>{{end}}
+<section><h3>Open actions <span class="dim">— P1 {{index .OpenCounts "P1"}} · P2 {{index .OpenCounts "P2"}} · P3 {{index .OpenCounts "P3"}}</span></h3>{{template "section" .Open}}</section>
+<section class="fold"><details data-key="parked"><summary><h3 class="dim">Parked — {{len .Parked}}</h3></summary>{{template "section" .Parked}}</details></section>
+
+<section class="meta dim">
+{{with .LastSession}}<p>Last session: {{if not .Date.IsZero}}{{.Date.Format "Mon 02 Jan"}} — {{end}}<a href="{{$href}}">{{.Title}}</a></p>{{end}}
+{{if .Health.Findings}}<p class="health-{{.Health.Level}}">Health {{.Health.Level.Symbol}}</p><ul>{{range .Health.Findings}}<li>{{.}}</li>{{end}}</ul>
+{{else}}<p>Health <span class="ok">✓</span> {{.HealthLine}}</p>{{end}}
+</section>
+{{end}}
+
+{{define "plan"}}{{if .}}<ol class="plan-steps">{{range .}}<li>{{if .Priority}}<span class="pri">{{.Priority}}</span> {{end}}{{.Text}}</li>{{end}}</ol>{{else}}<p class="dim none">None</p>{{end}}{{end}}
+
+{{define "session"}}
 {{if .Loading}}<div class="loading" role="status"><span class="spin" aria-hidden="true">⠋</span> <strong>{{.LoadingText}}</strong>
 <p class="dim">Opening its pane and loading its context. The conversation starts here once {{.Name}} is ready.</p></div>
 {{else if .Prompt}}<p class="ended"><strong>{{.Name}} is waiting on a prompt in its pane</strong> (a folder-trust question, say). Answer it there; the conversation starts here after.</p>
@@ -222,19 +265,14 @@ main.addEventListener("keydown", e => {
 {{end}}{{end}}
 </div>
 {{else}}<p class="ended"><strong>Not running</strong>{{if not .LastEnded.IsZero}} · last session ended {{.LastEnded.Local.Format "Mon 15:04"}}{{end}}{{with .SessionHref}} (<a href="{{.}}">log →</a>){{end}}</p>
-{{end}}{{if or .Loading .Prompt .Wrapping}}{{else if .CanSend}}<form class="answer send" method="post" action="{{.SendURL}}">
+{{end}}{{if or .Loading .Prompt .Wrapping}}{{else if .CanSend}}<div class="composer"><form class="answer send" method="post" action="{{.SendURL}}">
   <textarea name="text" rows="2" maxlength="4000" placeholder="Message {{.Name}}" aria-label="Message {{.Name}}"></textarea>
   <div class="row"><button type="submit">Send</button> <span class="dim hint">⌘/Ctrl-Enter · typed into its pane</span> <span class="status"></span></div>
-</form>{{if and .CloseURL (not .WrapStopped)}}<form class="answer close" method="post" action="{{.CloseURL}}">
-  <div class="row"><button type="submit" class="quiet"{{if .Busy}} disabled{{end}}>Wrap &amp; close</button> <span class="dim hint">{{if .Busy}}{{.Name}} is busy — wrap when it has finished.{{else}}Runs its wrap, then closes the pane.{{end}}</span> <span class="status{{if .CloseError}} error{{end}}">{{.CloseError}}</span></div>
-</form>{{end}}{{else if .CanStart}}<form class="answer start" method="post" action="{{.StartURL}}">
+</form></div>{{else if .CanStart}}<form class="answer start" method="post" action="{{.StartURL}}">
   <div class="row"><button type="submit">Start {{.Name}}</button> <span class="dim hint">Opens it in a new Herdr tab ({{.Harness}}) and runs its start; your view stays put.</span> <span class="status{{if .StartError}} error{{end}}">{{.StartError}}</span></div>
 </form>{{else}}<p class="dim send-note">{{.SendNote}}</p>{{end}}
 {{if and .WrapStopped .CloseURL}}<form class="answer close" method="post" action="{{.CloseURL}}" data-confirm="Close {{.Name}}'s pane without a finished wrap? Anything it has not recorded is lost.">
   <input type="hidden" name="force" value="1">
   <div class="row"><button type="submit" class="danger">Close anyway</button> <span class="status{{if .CloseError}} error{{end}}">{{.CloseError}}</span></div>
 </form>{{end}}
-{{if and .ChatLive (not .Loading) (not .Prompt)}}<p class="dim chat-foot">Read from the Claude Code transcript; thinking and tool output are left out.</p>{{end}}
-</aside></div>
-{{end}}
 {{end}}

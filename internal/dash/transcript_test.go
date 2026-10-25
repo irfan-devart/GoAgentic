@@ -112,7 +112,7 @@ func TestWebAgentPageShowsTheSession(t *testing.T) {
 	if strings.Contains(body, `class="msg`) || strings.Contains(body, `id="chat"`) {
 		t.Error("a stopped agent must show no chat history")
 	}
-	for _, want := range []string{"<strong>Not running</strong> · last session ended", "log →", "— not running"} {
+	for _, want := range []string{"<strong>Not running</strong> · last session ended", "log →", `state dim">not running`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("stopped agent page lacks %q", want)
 		}
