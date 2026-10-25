@@ -169,6 +169,7 @@ section.meta ul { margin: 2px 0; padding-left: 18px; }
 .sidebar a { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-radius: 6px; color: var(--side-fg); text-decoration: none; }
 .sidebar a:hover { background: var(--side-hover); }
 .sidebar a.current { background: var(--side-current); color: #fff; }
+.sidebar li.dragging { opacity: .45; }
 .sidebar a.selected { background: var(--side-hover); color: #fff; font-weight: 600; }
 .sidebar a.bold .nm { font-weight: 700; color: #fff; }
 .sidebar .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

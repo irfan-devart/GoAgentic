@@ -51,6 +51,9 @@ type WebSource struct {
 	CodexHome string
 	// ClosePane closes a pane; nil means `herdr pane close`.
 	ClosePane func(pane string) error
+	// OrderFile keeps the sidebar's order; "" means dash-order.json in the
+	// user's config folder (web_order.go).
+	OrderFile string
 	// Launch starts a stopped agent; nil means LaunchInBackground.
 	Launch func(ws *Workspace, a *Agent) (string, error)
 }
@@ -95,6 +98,7 @@ type webServer struct {
 	// fleet caches the sidebar's workspace list (web_nav.go).
 	fleetMu sync.Mutex
 	fleet   fleetCache
+	orderMu sync.Mutex
 	// launches holds the agents (ws/agent) a Start opened and that are not
 	// yet ready, so the page shows them loading and a second click or tab
 	// does not open a second session.
@@ -135,6 +139,7 @@ func NewWebHandler(src WebSource) http.Handler {
 	mux.HandleFunc("POST /w/{ws}/{agent}/send", s.send)
 	mux.HandleFunc("POST /w/{ws}/{agent}/start", s.start)
 	mux.HandleFunc("POST /w/{ws}/{agent}/close", s.close)
+	mux.HandleFunc("POST /order", s.reorder)
 	mux.HandleFunc("GET /style.css", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/css; charset=utf-8")
 		data, _ := webFiles.ReadFile("web/style.css")
@@ -383,7 +388,7 @@ func (s *webServer) workspace(w http.ResponseWriter, r *http.Request) {
 	p.Queue = makeQueue(queueLines(ws, all), 8)
 	// The home opens this workspace next time.
 	http.SetCookie(w, &http.Cookie{Name: "ws", Value: ws.Name, Path: "/", MaxAge: 365 * 24 * 3600, HttpOnly: true, SameSite: http.SameSiteLaxMode})
-	for _, a := range ws.Agents {
+	for _, a := range s.agentsInOrder(ws) {
 		row := MakeRow(ws, a)
 		p.Workspace.Rows = append(p.Workspace.Rows, agentRow{
 			Row: row, Href: link(all, "w", ws.Name, a.Name), Tone: toneClass(agentTone(ws, a)), LiveClass: liveClass(row.Live),

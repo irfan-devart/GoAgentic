@@ -77,7 +77,7 @@ func TestWebFleetWorkspaceAgent(t *testing.T) {
 	}
 
 	_, body := get(t, h, "/w/alpha")
-	for _, want := range []string{"<h4>Workspaces</h4>", `class="current" href="/w/alpha"`, `href="/w/Beta"`, "<h4>Agents</h4>", "<!doctype html>"} {
+	for _, want := range []string{`>Workspaces</h4>`, `class="current" href="/w/alpha"`, `href="/w/Beta"`, `>Agents</h4>`, "<!doctype html>"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("sidebar lacks %q", want)
 		}
@@ -765,5 +765,50 @@ func TestQueueRanksAcrossAgents(t *testing.T) {
 	want := "late-p1 late-p2 p1-soon p1-later p3 none answered"
 	if strings.Join(got, " ") != want || len(q.Top) != 3 || q.Total != 6 {
 		t.Errorf("queue = %v (top %d, total %d), want %s", got, len(q.Top), q.Total, want)
+	}
+}
+
+func TestWebSidebarReorder(t *testing.T) {
+	parent := webFleet(t)
+	write(t, filepath.Join(parent, "alpha/agents/Astrid/context.md"), "---\ntitle: Partner\n---\n")
+	write(t, filepath.Join(parent, "alpha/agents/Astrid/actions.md"), sectionedTracker)
+	order := filepath.Join(t.TempDir(), "order.json")
+	h := NewWebHandler(WebSource{FleetRoot: parent, Options: webOptions, OrderFile: order})
+	before := func(body, a, b string) bool {
+		i, j := strings.Index(body, `data-name="`+a+`"`), strings.Index(body, `data-name="`+b+`"`)
+		return i >= 0 && j >= 0 && i < j
+	}
+	if _, body := get(t, h, "/w/alpha"); !before(body, "alpha", "Beta") || !before(body, "Astrid", "Sigrid") {
+		t.Fatalf("default order wanted first:\n%s", body)
+	}
+	for _, f := range []url.Values{
+		{"kind": {"workspaces"}, "name": {"Beta", "alpha"}},
+		{"kind": {"agents"}, "ws": {"alpha"}, "name": {"Sigrid", "Astrid"}},
+	} {
+		if code, msg := post(t, h, "/order", f, "X-GoAgentic", "1"); code != http.StatusNoContent {
+			t.Fatalf("reorder %v = %d %s", f, code, msg)
+		}
+	}
+	_, body := get(t, h, "/w/alpha")
+	if !before(body, "Beta", "alpha") || !before(body, "Sigrid", "Astrid") {
+		t.Errorf("saved order not shown:\n%s", body)
+	}
+	// The home's agent table follows it too.
+	if i, j := strings.Index(body, `<td><a href="/w/alpha/Sigrid">`), strings.Index(body, `<td><a href="/w/alpha/Astrid">`); i < 0 || j < i {
+		t.Error("agent table must follow the sidebar order")
+	}
+	for name, c := range map[string]struct {
+		form   url.Values
+		header []string
+		want   int
+	}{
+		"no header": {url.Values{"kind": {"workspaces"}, "name": {"alpha"}}, nil, http.StatusForbidden},
+		"bad kind":  {url.Values{"kind": {"x"}, "name": {"alpha"}}, []string{"X-GoAgentic", "1"}, http.StatusBadRequest},
+		"no ws":     {url.Values{"kind": {"agents"}, "name": {"alpha"}}, []string{"X-GoAgentic", "1"}, http.StatusBadRequest},
+		"no names":  {url.Values{"kind": {"workspaces"}}, []string{"X-GoAgentic", "1"}, http.StatusBadRequest},
+	} {
+		if code, _ := post(t, h, "/order", c.form, c.header...); code != c.want {
+			t.Errorf("%s = %d, want %d", name, code, c.want)
+		}
 	}
 }

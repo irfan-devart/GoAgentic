@@ -46,7 +46,7 @@ func (s *webServer) workspaceNav(ws *Workspace, agent string, all bool) *nav {
 			n.Workspaces[i].Selected, n.Workspaces[i].Current = n.Workspaces[i].Current, false
 		}
 	}
-	for _, a := range ws.Agents {
+	for _, a := range s.agentsInOrder(ws) {
 		if a.Retired && !all && a.Name != agent {
 			continue
 		}
@@ -94,7 +94,12 @@ func (s *webServer) workspaceLinks(current *Workspace, all bool) []navLink {
 		out = append(out, workspaceLink(current, all))
 		out[0].Current = true
 	}
-	return out
+	return inOrder(out, func(l navLink) string { return l.Name }, s.loadOrder().Workspaces)
+}
+
+// agentsInOrder is the workspace's agents in the principal's sidebar order.
+func (s *webServer) agentsInOrder(ws *Workspace) []*Agent {
+	return inOrder(ws.Agents, func(a *Agent) string { return a.Name }, s.loadOrder().Agents[ws.Name])
 }
 
 func workspaceLink(ws *Workspace, all bool) navLink {

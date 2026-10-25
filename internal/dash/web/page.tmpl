@@ -16,7 +16,8 @@
 // keeps its focus.
 const main = document.getElementById("main");
 let inflight = 0; // a post is waiting on the server: its form must stay
-const busy = () => inflight || document.hidden || String(getSelection()) || document.activeElement?.tagName === "SELECT" ||
+let dragging = null; // a sidebar row being dragged into a new place
+const busy = () => inflight || dragging || document.hidden || String(getSelection()) || document.activeElement?.tagName === "SELECT" ||
   [...main.querySelectorAll("textarea")].some(t => t.value.trim() || (t === document.activeElement && !t.closest("form.send")));
 // The chat follows new messages while you are at its bottom, and stays put
 // while you read further up.
@@ -87,6 +88,39 @@ main.addEventListener("submit", async e => {
     inflight--;
   }
 });
+// Drag a workspace or an agent in the sidebar to reorder it; the order is
+// saved on the server, so every browser shows it.
+main.addEventListener("dragstart", e => {
+  const li = e.target.closest?.(".sidebar li[data-name]");
+  if (!li) return;
+  dragging = li;
+  li.classList.add("dragging");
+  e.dataTransfer.effectAllowed = "move";
+});
+main.addEventListener("dragover", e => {
+  const li = dragging && e.target.closest?.(".sidebar li[data-name]");
+  if (!li || li.parentElement !== dragging.parentElement) return;
+  e.preventDefault();
+  if (li === dragging) return;
+  const r = li.getBoundingClientRect();
+  li.parentElement.insertBefore(dragging, e.clientY > r.top + r.height / 2 ? li.nextSibling : li);
+});
+main.addEventListener("drop", e => { if (dragging) e.preventDefault(); });
+main.addEventListener("dragend", async () => {
+  if (!dragging) return;
+  const ul = dragging.parentElement;
+  dragging.classList.remove("dragging");
+  const body = new URLSearchParams({kind: ul.dataset.kind, ws: ul.dataset.ws || ""});
+  for (const li of ul.querySelectorAll("li[data-name]")) body.append("name", li.dataset.name);
+  inflight++;
+  try {
+    await fetch("/order", {method: "POST", headers: {"X-GoAgentic": "1"}, body});
+  } finally {
+    inflight--;
+    dragging = null;
+  }
+  refresh(true).catch(() => {});
+});
 main.addEventListener("keydown", e => {
   if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && e.target.matches("form.answer textarea")) e.target.form.requestSubmit();
 });
@@ -102,10 +136,10 @@ main.addEventListener("keydown", e => {
   <span class="topbar-right">{{if .All}}<a href="?">hide retired</a>{{else}}<a href="?all=1">show retired</a>{{end}} · {{.Scanned.Format "15:04:05"}}</span>
 </header>
 <nav class="sidebar" data-scroll="sidebar">{{with .Nav}}
-  <h4>Workspaces</h4>
-  <ul>{{range .Workspaces}}{{template "navlink" .}}{{end}}</ul>
-  <h4>Agents</h4>
-  <ul>{{range .Agents}}{{template "navlink" .}}{{end}}</ul>
+  <h4 title="Drag to reorder">Workspaces</h4>
+  <ul data-kind="workspaces">{{range .Workspaces}}{{template "navlink" .}}{{end}}</ul>
+  <h4 title="Drag to reorder">Agents</h4>
+  <ul data-kind="agents" data-ws="{{.Current}}">{{range .Agents}}{{template "navlink" .}}{{end}}</ul>
 {{end}}</nav>
 <section class="content" data-scroll="content">
 {{if .Counts}}{{template "counts" .}}{{end}}
@@ -134,7 +168,7 @@ main.addEventListener("keydown", e => {
 
 {{define "state"}}<span class="state {{.Class}}">{{if .Working}}<span class="spin" aria-hidden="true">⠋</span> {{end}}{{.State}}</span>{{end}}
 
-{{define "navlink"}}<li><a class="{{if .Current}}current{{else if .Selected}}selected{{end}}{{if .Bold}} bold{{end}}" href="{{.Href}}"{{if .State}} title="{{.State}}"{{end}}><span class="dot {{if .Dot}}{{.Dot}}{{else}}off{{end}}"></span><span class="nm">{{.Name}}</span>{{if .Badge}}<span class="badge" title="{{.Badge}} waiting on you">{{.Badge}}</span>{{end}}</a></li>{{end}}
+{{define "navlink"}}<li data-name="{{.Name}}"><a class="{{if .Current}}current{{else if .Selected}}selected{{end}}{{if .Bold}} bold{{end}}" href="{{.Href}}"{{if .State}} title="{{.State}}"{{end}}><span class="dot {{if .Dot}}{{.Dot}}{{else}}off{{end}}"></span><span class="nm">{{.Name}}</span>{{if .Badge}}<span class="badge" title="{{.Badge}} waiting on you">{{.Badge}}</span>{{end}}</a></li>{{end}}
 
 {{define "now"}}
 <section class="now"><h2>Now <span class="dim">— sessions running in a pane</span></h2>
