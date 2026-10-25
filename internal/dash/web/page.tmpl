@@ -10,18 +10,42 @@
 <main id="main">{{template "main" .}}</main>
 <script>
 // Re-read the page every 5 seconds, as the TUI does, and swap in the new
-// <main>; paused while the tab is hidden or text is selected. Open
-// <details> stay open across the swap.
-setInterval(async () => {
-  if (document.hidden || String(getSelection())) return;
-  const open = [...document.querySelectorAll("details[open]")].map(d => d.dataset.key);
+// <main>. Paused while the tab is hidden, text is selected, or an answer is
+// being written, so a refresh never eats a draft. Open <details> stay open.
+const main = document.getElementById("main");
+const busy = () => document.hidden || String(getSelection()) ||
+  [...main.querySelectorAll("textarea")].some(t => t.value.trim() || t === document.activeElement);
+async function refresh() {
+  const open = [...main.querySelectorAll("details[open]")].map(d => d.dataset.key);
+  const res = await fetch(location.href, {headers: {"X-Partial": "1"}});
+  if (!res.ok) return;
+  main.innerHTML = await res.text();
+  for (const key of open) main.querySelector(`details[data-key="${CSS.escape(key)}"]`)?.setAttribute("open", "");
+}
+setInterval(() => { if (!busy()) refresh().catch(() => {}); }, 5000);
+
+// An answer posts with the X-GoAgentic header (the server refuses writes
+// without it), then the page refreshes to show it.
+main.addEventListener("submit", async e => {
+  const form = e.target.closest("form.answer");
+  if (!form) return;
+  e.preventDefault();
+  const button = form.querySelector("button"), status = form.querySelector(".status");
+  button.disabled = true;
+  status.textContent = "Sending…";
   try {
-    const res = await fetch(location.href, {headers: {"X-Partial": "1"}});
-    if (!res.ok) return;
-    document.getElementById("main").innerHTML = await res.text();
-    for (const key of open) document.querySelector(`details[data-key="${CSS.escape(key)}"]`)?.setAttribute("open", "");
-  } catch (_) {}
-}, 5000);
+    const res = await fetch(form.action, {method: "POST", headers: {"X-GoAgentic": "1"}, body: new URLSearchParams(new FormData(form))});
+    if (!res.ok) throw new Error((await res.text()).trim() || res.statusText);
+    form.querySelector("textarea").value = "";
+    await refresh();
+  } catch (err) {
+    status.textContent = err.message;
+    button.disabled = false;
+  }
+});
+main.addEventListener("keydown", e => {
+  if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && e.target.matches("form.answer textarea")) e.target.form.requestSubmit();
+});
 </script>
 </body>
 </html>{{end}}
@@ -33,7 +57,7 @@ setInterval(async () => {
 {{if .Workspace}}{{template "workspace" .}}{{end}}
 {{if .Agent}}{{template "agent" .}}{{end}}
 {{with .File}}<h2>{{.Name}}</h2><pre class="file">{{.Text}}</pre>{{end}}
-<footer class="dim">Read-only · refreshes every 5 s · scanned {{.Scanned.Format "15:04:05"}} ·
+<footer class="dim">Answers go to the agent's inbox; trackers are never edited · refreshes every 5 s · scanned {{.Scanned.Format "15:04:05"}} ·
 {{if .All}}<a href="?">hide retired</a>{{else}}<a href="?all=1">show retired</a>{{end}}</footer>
 {{end}}
 
@@ -98,12 +122,19 @@ setInterval(async () => {
 {{template "legend"}}
 {{end}}
 
-{{define "item"}}<details class="item" data-key="{{.ID}}">
-<summary>{{if .Priority}}<span class="pri">{{.Priority}}</span> {{end}}<span class="id">#{{trimHash .ID}}</span> <span class="headline">{{.Headline}}</span>{{if .Note}} <span class="dim">{{.Note}}</span>{{end}}</summary>
+{{define "item"}}<details class="item{{if .Answers}} answered{{end}}" data-key="{{.Key}}">
+<summary>{{if .Priority}}<span class="pri">{{.Priority}}</span> {{end}}<span class="id">#{{trimHash .ID}}</span> <span class="headline">{{.Headline}}</span>{{if .Note}} <span class="dim">{{.Note}}</span>{{end}}{{if .Answers}} <span class="ok tag">✓ answered, waiting on {{.Agent}}</span>{{else if .CanAnswer}} <span class="answer-hint">Answer</span>{{end}}</summary>
 <div class="more">
   {{if .Detail}}<p>{{.Detail}}</p>{{end}}
   <p class="dim">{{if .Owner}}Owner {{.Owner}}{{end}}{{if .Status}} · {{.Status}}{{end}}{{if .Due}} · due {{.Due.Format "2006-01-02"}}{{end}}</p>
   {{if .History}}<p><a href="{{.History}}">History note →</a></p>{{end}}
+  {{range .Answers}}<blockquote class="given"><span class="dim">You, {{.At.Format "Mon 15:04"}}:</span> {{.Text}}</blockquote>{{end}}
+  {{if .Answers}}<p class="dim">{{.Agent}} picks this up at its next start{{if .AgentLive}}. It is open in a pane now, so it will not see this until it restarts, or tell it there{{end}}.</p>{{end}}
+  {{if .CanAnswer}}<form class="answer" method="post" action="{{.AnswerURL}}">
+    <input type="hidden" name="id" value="{{trimHash .ID}}">
+    <textarea name="text" rows="3" maxlength="4000" placeholder="{{if .Answers}}Add to your answer{{else}}Your answer to {{.Agent}}{{end}}" aria-label="Answer #{{trimHash .ID}}"></textarea>
+    <div class="row"><button type="submit">Send to {{.Agent}}</button> <span class="dim hint">⌘/Ctrl-Enter</span> <span class="status"></span></div>
+  </form>{{end}}
 </div>
 </details>{{end}}
 
@@ -118,7 +149,7 @@ setInterval(async () => {
 {{if .Plan}}<ol class="plan-steps">{{range .Plan}}<li>{{if .Priority}}<span class="pri">{{.Priority}}</span> {{end}}{{.Text}}</li>{{end}}</ol>{{else}}<p class="dim none">None</p>{{end}}</section>
 
 <section><h3 class="foryou">Waiting on {{$first}}</h3>
-{{template "section" .Mine}}
+{{if or .Mine .Answered}}<ul class="items">{{range .Mine}}<li>{{template "item" .}}</li>{{end}}{{range .Answered}}<li>{{template "item" .}}</li>{{end}}</ul>{{else}}<p class="dim none">None</p>{{end}}
 {{if .Inbox}}<p>{{.Inbox}} scheduled run(s) not yet read — start the agent to drain its inbox</p>{{end}}</section>
 
 <section><h3 class="waiting">Waiting on others ◆</h3>{{template "section" .Others}}</section>

@@ -105,7 +105,12 @@ func Scan(root string, opts Options) (*Workspace, error) {
 			continue
 		}
 		rel, _ := filepath.Rel(root, dir)
+		// The inbox is written by ticks and dashboard answers and committed
+		// at the agent's next wrap, so it is not a session left open.
 		a.Uncommitted = dirty.under(rel)
+		if dirty.has(filepath.Join(rel, "memory", "scheduled", "inbox.md")) {
+			a.Uncommitted--
+		}
 		a.Unwrapped = unwrapped(dir, dirty.has(filepath.Join(rel, "actions.md")))
 		ws.Agents = append(ws.Agents, a)
 	}

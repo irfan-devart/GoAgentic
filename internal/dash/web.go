@@ -18,8 +18,9 @@ import (
 )
 
 // The web dashboard: the same picture as the TUI, served as HTML. It reads
-// through the same scan and the same section logic, so the two agree. It is
-// read-only: every route is a GET and nothing is written.
+// through the same scan and the same section logic, so the two agree. The
+// one write is an answer to an item that waits on the principal, appended to
+// the agent's inbox (answers.go); trackers are never edited.
 
 //go:embed web/page.tmpl web/style.css
 var webFiles embed.FS
@@ -35,6 +36,11 @@ type WebSource struct {
 	Root      string
 	// Options builds the scan options; all includes retired agents.
 	Options func(all bool) Options
+	// ListenHost is the address the server listens on when it is not a
+	// loopback one; requests must name it or a loopback host (see guard).
+	ListenHost string
+	// Now stamps answers; nil means time.Now.
+	Now func() time.Time
 }
 
 // Serve runs the web dashboard on addr until ctx ends.
@@ -43,10 +49,13 @@ func Serve(ctx context.Context, addr string, src WebSource, log io.Writer) error
 	if err != nil {
 		return err
 	}
+	if !loopback(ln.Addr()) {
+		src.ListenHost = ln.Addr().(*net.TCPAddr).IP.String()
+	}
 	srv := &http.Server{Handler: NewWebHandler(src), ReadHeaderTimeout: 10 * time.Second}
 	fmt.Fprintf(log, "Dashboard on http://%s/ — Ctrl-C to stop.\n", ln.Addr())
-	if !loopback(ln.Addr()) {
-		fmt.Fprintln(log, "Not a loopback address: anyone who can reach it can read every tracker shown.")
+	if src.ListenHost != "" {
+		fmt.Fprintln(log, "Not a loopback address: anyone who can reach it can read every tracker shown and answer as you.")
 	}
 	go func() {
 		<-ctx.Done()
@@ -80,12 +89,49 @@ func NewWebHandler(src WebSource) http.Handler {
 	mux.HandleFunc("GET /w/{ws}", s.workspace)
 	mux.HandleFunc("GET /w/{ws}/{agent}", s.agent)
 	mux.HandleFunc("GET /w/{ws}/{agent}/file", s.file)
+	mux.HandleFunc("POST /w/{ws}/{agent}/answer", s.answer)
 	mux.HandleFunc("GET /style.css", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/css; charset=utf-8")
 		data, _ := webFiles.ReadFile("web/style.css")
 		_, _ = w.Write(data)
 	})
-	return mux
+	return s.guard(mux)
+}
+
+// guard turns away requests a browser was tricked into sending. The Host
+// must be a loopback name or the address we listen on (against DNS
+// rebinding). A write must carry the X-GoAgentic header, which a page on
+// another site cannot add without a CORS preflight this server never
+// grants, and any Origin must pass the same host check.
+func (s *webServer) guard(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !s.allowedHost(r.Host) {
+			http.Error(w, "unexpected Host", http.StatusForbidden)
+			return
+		}
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			origin := r.Header.Get("Origin")
+			host := strings.TrimPrefix(strings.TrimPrefix(origin, "http://"), "https://")
+			if r.Header.Get("X-GoAgentic") != "1" || (origin != "" && (host == origin || !s.allowedHost(host))) {
+				http.Error(w, "cross-site write refused", http.StatusForbidden)
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (s *webServer) allowedHost(hostport string) bool {
+	host := hostport
+	if h, _, err := net.SplitHostPort(hostport); err == nil {
+		host = h
+	}
+	host = strings.Trim(host, "[]")
+	if host == "localhost" || (s.src.ListenHost != "" && host == s.src.ListenHost) {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 // page is everything the template needs; one of Fleet, Workspace, Agent or
@@ -138,6 +184,7 @@ type webAgent struct {
 	Facts       []string
 	Plan        []PlanStep
 	Mine        []webItem
+	Answered    []webItem
 	Inbox       int
 	Others      []webItem
 	Blocked     []webItem
@@ -153,6 +200,17 @@ type webAgent struct {
 type webItem struct {
 	Item
 	Headline, Detail, Note, History string
+	// Key names the item uniquely on a page (agent/id), so open panels
+	// survive a refresh.
+	Key string
+	// CanAnswer: the item waits on the principal, so the page offers an
+	// answer box posting to AnswerURL. Answers are the ones not yet picked
+	// up by the agent.
+	CanAnswer bool
+	AnswerURL string
+	Answers   []Answer
+	Agent     string
+	AgentLive bool
 }
 
 type webFile struct {
@@ -254,7 +312,7 @@ func (s *webServer) workspace(w http.ResponseWriter, r *http.Request) {
 	for _, a := range ws.Agents {
 		href := link(all, "w", ws.Name, a.Name)
 		start := len(p.Workspace.Waiting)
-		for _, it := range a.ForPrincipal(ws.Principal) {
+		for _, it := range append(a.ForPrincipal(ws.Principal), a.AnsweredItems(ws.Principal)...) {
 			wi := makeWebItem(ws, a, it, all)
 			p.Workspace.Waiting = append(p.Workspace.Waiting, waitingLine{Agent: a.Name, AgentHref: href, Item: &wi})
 		}
@@ -305,7 +363,7 @@ func (s *webServer) agent(w http.ResponseWriter, r *http.Request) {
 	}
 	wa := &webAgent{
 		Name: a.Name, Title: a.Title, Facts: detailFacts(ws, a),
-		Plan: sec.Plan, Mine: items(sec.Mine), Inbox: sec.Inbox,
+		Plan: sec.Plan, Mine: items(sec.Mine), Answered: items(sec.Answered), Inbox: sec.Inbox,
 		Others: items(sec.Others), Blocked: items(sec.Blocked), Open: items(sec.Open),
 		OpenCounts: sec.OpenCounts, Parked: items(sec.Parked), Health: a.Health,
 		HealthLine: fmt.Sprintf("standing %d/%d · sessions %d/%d · actions %d KB",
@@ -349,6 +407,38 @@ func (s *webServer) file(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// answer appends the principal's answer to an item to the agent's inbox.
+// The page refreshes itself afterwards, so the reply is only a status.
+func (s *webServer) answer(w http.ResponseWriter, r *http.Request) {
+	ws, a, ok := s.findAgent(w, r)
+	if !ok {
+		return
+	}
+	id := strings.TrimPrefix(r.FormValue("id"), "#")
+	var item *Item
+	for i := range a.Open {
+		if strings.TrimPrefix(a.Open[i].ID, "#") == id {
+			item = &a.Open[i]
+		}
+	}
+	if item == nil || !waitsOnPrincipal(*item, ws.Principal) {
+		http.Error(w, "#"+id+" is not an open item waiting on "+firstName(ws.Principal), http.StatusBadRequest)
+		return
+	}
+	now := time.Now
+	if s.src.Now != nil {
+		now = s.src.Now
+	}
+	s.mu.Lock()
+	err := AppendAnswer(a, ws.Principal, id, r.FormValue("text"), now())
+	s.mu.Unlock()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // agentFile resolves rel inside the agent's folder: a .md file, no way out
 // of the folder by .. or a symlink.
 func agentFile(dir, rel string) (string, bool) {
@@ -381,7 +471,13 @@ func fileLink(ws *Workspace, a *Agent, rel string, all bool) string {
 // makeWebItem adds what the page shows beside the item: the rest of the
 // Action cell, a parked note, and a link to its history note if one exists.
 func makeWebItem(ws *Workspace, a *Agent, it Item, all bool) webItem {
-	wi := webItem{Item: it, Headline: it.Headline()}
+	id := strings.TrimPrefix(it.ID, "#")
+	wi := webItem{
+		Item: it, Headline: it.Headline(), Key: a.Name + "/" + id,
+		CanAnswer: waitsOnPrincipal(it, ws.Principal), Answers: a.Answers[id],
+		AnswerURL: "/w/" + ws.Name + "/" + a.Name + "/answer",
+		Agent:     a.Name, AgentLive: a.Live != nil && a.Live.Running,
+	}
 	if detail := strings.TrimSpace(strings.TrimPrefix(cleanMarkdown(it.Action), wi.Headline)); detail != "" && detail != wi.Headline {
 		wi.Detail = strings.TrimSpace(strings.TrimLeft(detail, "—–-.: "))
 	}

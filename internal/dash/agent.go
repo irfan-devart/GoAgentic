@@ -36,8 +36,12 @@ type Agent struct {
 	ActionsSize int64
 	Missing     []string
 
-	PeerOpen         int
+	PeerOpen int
+	// InboxUnprocessed counts unread scheduled runs; Answers holds the
+	// principal's answers from the web dashboard, by item id, not yet
+	// picked up.
 	InboxUnprocessed int
+	Answers          map[string][]Answer
 	Uncommitted      int
 	// Unwrapped: the tracker changed after the newest session log and was
 	// never committed, so a session ended without a wrap.
@@ -119,6 +123,7 @@ func loadAgent(dir, principal string, now time.Time) *Agent {
 	}
 	if data, err := os.ReadFile(filepath.Join(dir, "memory", "scheduled", "inbox.md")); err == nil {
 		a.InboxUnprocessed = countUnprocessed(string(data))
+		a.Answers = parseAnswers(string(data))
 	}
 	return a
 }
@@ -131,7 +136,7 @@ func countUnprocessed(inbox string) int {
 	n := 0
 	for _, line := range strings.Split(inbox, "\n") {
 		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, "#") || strings.Contains(line, "<") {
+		if !strings.HasPrefix(line, "#") || strings.Contains(line, "<") || isAnswerHeading(line) {
 			continue
 		}
 		parts := strings.Split(line, "—")
@@ -532,15 +537,20 @@ func (a *Agent) NextUp(principal string) (Item, bool) {
 }
 
 // ForPrincipal lists open rows the principal alone owns: work that waits on
-// them, not work they share with the agent.
+// them, not work they share with the agent. A row answered from the web
+// dashboard waits on the agent now, so it is left out (AnsweredItems).
 func (a *Agent) ForPrincipal(principal string) []Item {
 	var out []Item
 	for _, it := range a.Open {
-		if (it.OnlyOwnedBy(principal) || it.WaitsOn(principal)) && !it.Parked() && !it.Blocked() {
+		if waitsOnPrincipal(it, principal) && !a.Answered(it) {
 			out = append(out, it)
 		}
 	}
 	return out
+}
+
+func waitsOnPrincipal(it Item, principal string) bool {
+	return (it.OnlyOwnedBy(principal) || it.WaitsOn(principal)) && !it.Parked() && !it.Blocked()
 }
 
 // PlanStep is one step of the agent's "Next session:" line, with the

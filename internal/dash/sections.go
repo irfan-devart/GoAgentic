@@ -5,9 +5,12 @@ package dash
 // the two never disagree about where an item belongs.
 type Sections struct {
 	Plan []PlanStep
-	// Mine waits on the principal; Inbox counts unread scheduled runs.
-	Mine  []Item
-	Inbox int
+	// Mine waits on the principal; Answered was answered from the web
+	// dashboard and waits for the agent to pick it up; Inbox counts unread
+	// scheduled runs.
+	Mine     []Item
+	Answered []Item
+	Inbox    int
 	// Others waits on someone else, Blocked is stuck, both by priority.
 	Others  []Item
 	Blocked []Item
@@ -25,6 +28,10 @@ func DetailSections(ws *Workspace, a *Agent) Sections {
 	for _, it := range a.ForPrincipal(ws.Principal) {
 		shownElsewhere[it.ID] = true
 		s.Mine = append(s.Mine, it)
+	}
+	for _, it := range a.AnsweredItems(ws.Principal) {
+		shownElsewhere[it.ID] = true
+		s.Answered = append(s.Answered, it)
 	}
 	for _, it := range byPriority(a.WaitingOnOthers(ws.Principal)) {
 		if shownElsewhere[it.ID] {

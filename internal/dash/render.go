@@ -306,6 +306,9 @@ func detail(ws *Workspace, a *Agent, width, maxItems int, showParked bool, st St
 	for _, it := range sec.Mine {
 		mine = append(mine, fmt.Sprintf("  %-2s #%-3s %s", it.Priority, strings.TrimPrefix(it.ID, "#"), it.Headline()))
 	}
+	for _, it := range sec.Answered {
+		mine = append(mine, st.Dim.Render(fmt.Sprintf("  %-2s #%-3s %s  ✓ answered, waiting on %s", it.Priority, strings.TrimPrefix(it.ID, "#"), it.Headline(), a.Name)))
+	}
 	if sec.Inbox > 0 {
 		mine = append(mine, fmt.Sprintf("  %d scheduled run(s) not yet read — start the agent to drain its inbox", sec.Inbox))
 	}

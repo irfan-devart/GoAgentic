@@ -61,7 +61,7 @@ agents/CONVENTIONS.md, or the one given with --root.`,
 	cmd.Flags().BoolVar(&flags.printRoot, "print-root", false, "Print the workspace directory the dashboard would show and exit.")
 	cmd.Flags().BoolVar(&flags.noColor, "no-color", false, "Disable color.")
 	cmd.Flags().IntVar(&flags.width, "width", 0, "Output width for --once (default: terminal width, else 120).")
-	cmd.Flags().BoolVar(&flags.web, "web", false, "Serve the dashboard as a web page instead (read-only); with --fleet, every workspace.")
+	cmd.Flags().BoolVar(&flags.web, "web", false, "Serve the dashboard as a web page; items waiting on you can be answered there (into the agent's inbox). With --fleet, every workspace.")
 	cmd.Flags().StringVar(&flags.addr, "addr", "127.0.0.1:7777", "With --web, the address to listen on.")
 	return cmd
 }
