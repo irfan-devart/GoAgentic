@@ -93,7 +93,7 @@ func TestWebFleetWorkspaceAgent(t *testing.T) {
 	_, body = get(t, h, "/w/alpha/Sigrid")
 	for _, want := range []string{
 		"Sigrid", "Lead", "Next session", "Waiting on you",
-		`class="current" href="/w/alpha/Sigrid"`, `<div class="info"`, `<div class="chat-col">`, // the sidebar marks it; info beside the chat
+		`class="current" href="/w/alpha/Sigrid"`, `<span class="nm">Sigrid<small>Lead</small></span>`, `<div class="info"`, `<div class="chat-col">`, // the sidebar marks it; info beside the chat
 		`Open actions <span class="dim">— P1 1`, "Parked — 1", "Shipped it",
 		`href="/w/alpha/Sigrid/file?p=items%2F5-tidy-memory.md"`, // history note link
 		"Long detail | with a pipe",                              // the rest of the Action cell

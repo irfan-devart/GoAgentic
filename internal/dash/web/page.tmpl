@@ -168,7 +168,7 @@ main.addEventListener("keydown", e => {
 
 {{define "state"}}<span class="state {{.Class}}">{{if .Working}}<span class="spin" aria-hidden="true">⠋</span> {{end}}{{.State}}</span>{{end}}
 
-{{define "navlink"}}<li data-name="{{.Name}}"><a class="{{if .Current}}current{{else if .Selected}}selected{{end}}{{if .Bold}} bold{{end}}" href="{{.Href}}"{{if .State}} title="{{.State}}"{{end}}><span class="dot {{if .Dot}}{{.Dot}}{{else}}off{{end}}"></span><span class="nm">{{.Name}}</span>{{if .Badge}}<span class="badge" title="{{.Badge}} waiting on you">{{.Badge}}</span>{{end}}</a></li>{{end}}
+{{define "navlink"}}<li data-name="{{.Name}}"><a class="{{if .Current}}current{{else if .Selected}}selected{{end}}{{if .Bold}} bold{{end}}" href="{{.Href}}"{{if .State}} title="{{.State}}"{{end}}><span class="dot {{if .Dot}}{{.Dot}}{{else}}off{{end}}"></span><span class="nm">{{.Name}}{{with .Sub}}<small>{{.}}</small>{{end}}</span>{{if .Badge}}<span class="badge" title="{{.Badge}} waiting on you">{{.Badge}}</span>{{end}}</a></li>{{end}}
 
 {{define "now"}}
 <section class="now"><h2>Now <span class="dim">— sessions running in a pane</span></h2>

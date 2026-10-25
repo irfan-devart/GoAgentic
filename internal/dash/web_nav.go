@@ -23,6 +23,8 @@ type navLink struct {
 	Dot, State string
 	Badge      int
 	Bold       bool
+	// Sub is a line under the name: an agent's title.
+	Sub string
 	// Current: the page shown; Selected: the workspace of the agent shown.
 	Current, Selected bool
 }
@@ -50,7 +52,7 @@ func (s *webServer) workspaceNav(ws *Workspace, agent string, all bool) *nav {
 		if a.Retired && !all && a.Name != agent {
 			continue
 		}
-		l := navLink{Name: a.Name, Href: link(all, "w", ws.Name, a.Name), Current: a.Name == agent,
+		l := navLink{Name: a.Name, Href: link(all, "w", ws.Name, a.Name), Sub: a.Title, Current: a.Name == agent,
 			Badge: len(a.ForPrincipal(ws.Principal)) + a.InboxUnprocessed}
 		l.Dot, l.State, l.Bold = sessionDot(a)
 		n.Agents = append(n.Agents, l)
