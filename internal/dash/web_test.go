@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -668,7 +669,7 @@ func TestWebWrapAndClose(t *testing.T) {
 	pane := claudePane("idle", "s1")
 	var typed []string
 	var closed []string
-	src := WebSource{FleetRoot: parent, Options: paneOpts(parent, tr, &pane),
+	src := WebSource{FleetRoot: parent, Options: paneOpts(parent, tr, &pane), CloseEvery: -1, // the page drives it here
 		Prompt:    func(p, text string) error { typed = append(typed, p+" "+text); return nil },
 		ClosePane: func(p string) error { closed = append(closed, p); return nil }}
 	h := NewWebHandler(src)
@@ -1051,5 +1052,61 @@ func TestFindFocus(t *testing.T) {
 	chat = append(chat, ChatEntry{Kind: "agent", Text: "**Proposed focus**\n1. **#79 shared Holocron.** Read the reply."})
 	if f := findFocus(chat); f == nil || f.Items[0] != "#79 shared Holocron" || f.Agreed {
 		t.Errorf("re-declared focus = %+v", f)
+	}
+}
+
+// With no page open, the server closes the pane once the wrap is done.
+func TestWrapClosesWithNoPageOpen(t *testing.T) {
+	parent := webFleet(t)
+	tr := t.TempDir()
+	write(t, filepath.Join(tr, projectDirName(filepath.Join(parent, "alpha")), "s1.jsonl"), transcriptFixture)
+	var mu sync.Mutex
+	status, closed := "idle", make(chan string, 1)
+	opts := func(bool) Options {
+		return Options{Now: now, Transcripts: tr, Herdr: func() ([]LivePane, error) {
+			mu.Lock()
+			defer mu.Unlock()
+			if status == "" {
+				return nil, nil
+			}
+			p := *claudePane(status, "s1")
+			p.CWD = filepath.Join(parent, "alpha")
+			return []LivePane{p}, nil
+		}}
+	}
+	h := NewWebHandler(WebSource{FleetRoot: parent, Options: opts, CloseEvery: 10 * time.Millisecond,
+		Prompt: func(string, string) error {
+			mu.Lock()
+			status = "working"
+			mu.Unlock()
+			return nil
+		},
+		ClosePane: func(p string) error {
+			mu.Lock()
+			status = ""
+			mu.Unlock()
+			closed <- p
+			return nil
+		}})
+	if code, msg := post(t, h, "/w/alpha/Sigrid/close", nil, "X-GoAgentic", "1"); code != http.StatusAccepted {
+		t.Fatalf("close = %d %s", code, msg)
+	}
+	time.Sleep(50 * time.Millisecond)
+	select {
+	case p := <-closed:
+		t.Fatalf("closed %s while still wrapping", p)
+	default:
+	}
+	write(t, filepath.Join(parent, "alpha/agents/Sigrid/memory/sessions/2026-10-25-wrapped.md"), "---\ndate: 2026-10-25\n---\n")
+	mu.Lock()
+	status = "idle"
+	mu.Unlock()
+	select {
+	case p := <-closed:
+		if p != "w1:p7" {
+			t.Errorf("closed %q", p)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the pane was not closed after the wrap")
 	}
 }

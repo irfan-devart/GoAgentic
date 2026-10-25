@@ -72,6 +72,10 @@ type WebSource struct {
 	UploadDir string
 	// ReadPane is a pane's last lines; nil means `herdr pane read`.
 	ReadPane func(pane string) (string, error)
+	// CloseEvery is how often a Wrap & close is checked on the server, so
+	// the pane closes when the wrap is done whether or not a page is open;
+	// 0 means every 3 s, below 0 only when the agent's page refreshes.
+	CloseEvery time.Duration
 	// Launch starts a stopped agent; nil means LaunchInBackground.
 	Launch func(ws *Workspace, a *Agent) (string, error)
 }
@@ -900,7 +904,42 @@ func (s *webServer) close(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
+	if s.src.CloseEvery >= 0 {
+		go s.watchClose(ws.Name, a.Name, key)
+	}
 	w.WriteHeader(http.StatusAccepted)
+}
+
+// closeWatchFor bounds how long a wrap is watched.
+const closeWatchFor = 30 * time.Minute
+
+// watchClose closes the agent's pane once its wrap is done, checking on
+// its own so that no page needs to be open.
+func (s *webServer) watchClose(wsName, agent, key string) {
+	every := s.src.CloseEvery
+	if every == 0 {
+		every = 3 * time.Second
+	}
+	for start := time.Now(); time.Since(start) < closeWatchFor; {
+		time.Sleep(every)
+		s.startMu.Lock()
+		_, watching := s.closes[key]
+		s.startMu.Unlock()
+		if !watching {
+			return // closed, cancelled, or stopped
+		}
+		ws, err := s.scanWorkspace(wsName, false)
+		if err != nil {
+			continue
+		}
+		for _, a := range ws.Agents {
+			if a.Name == agent {
+				s.startMu.Lock()
+				s.checkClose(ws, a)
+				s.startMu.Unlock()
+			}
+		}
+	}
 }
 
 func (s *webServer) closePane(pane string) error {
@@ -931,42 +970,64 @@ func (s *webServer) applyClose(ws *Workspace, a *Agent, wa *webAgent) {
 	if st == nil {
 		return
 	}
-	if !live {
-		delete(s.closes, key)
-		return
-	}
 	// A session that is wrapping up is past starting, whatever its chat shows.
 	wa.Loading = false
-	if wa.CloseURL == "" && sessionPane(a.Live) {
+	if live && wa.CloseURL == "" && sessionPane(a.Live) {
 		wa.CloseURL = "/w/" + ws.Name + "/" + a.Name + "/close"
 	}
-	if st.err != "" {
-		wa.CloseError = st.err
-		return
-	}
-	if !settled(a.Live) {
-		st.busy = true
-		wa.Wrapping = true
-		return
-	}
-	if wroteSessionSince(a.Dir, st.at) {
-		if err := s.closePane(a.Live.PaneID); err != nil {
-			st.err = "Close failed: " + err.Error()
-			wa.CloseError = st.err
-			return
-		}
-		delete(s.closes, key)
-		wa.ChatLive, wa.CanSend, wa.CloseURL, wa.Chat = false, false, "", nil
+	switch s.checkClose(ws, a) {
+	case closeGone, closeDone:
+		wa.ChatLive, wa.CanSend, wa.CloseURL, wa.Chat, wa.Focus = false, false, "", nil, nil
 		wa.LastEnded = time.Now()
 		stopped(ws, a, wa)
-		return
-	}
-	// Settled with no log: give it a moment to start, then say it stopped.
-	if !st.busy && time.Since(st.at) < 20*time.Second {
+	case closeFailed:
+		wa.CloseError = st.err
+	case closeWrapping:
 		wa.Wrapping = true
-		return
+	case closeStopped:
+		wa.WrapStopped = true
 	}
-	wa.WrapStopped = true
+}
+
+type closeStep int
+
+const (
+	closeNone     closeStep = iota // no Wrap & close
+	closeWrapping                  // the wrap is running
+	closeDone                      // wrapped: its pane was closed now
+	closeGone                      // its pane is gone
+	closeFailed                    // closing failed (st.err)
+	closeStopped                   // it stopped without writing its log
+)
+
+// checkClose moves a Wrap & close on: once the agent has settled with its
+// session log written, its pane is closed. Callers hold startMu.
+func (s *webServer) checkClose(ws *Workspace, a *Agent) closeStep {
+	key := ws.Name + "/" + a.Name
+	st := s.closes[key]
+	switch {
+	case st == nil:
+		return closeNone
+	case a.Live == nil || !a.Live.Running:
+		delete(s.closes, key)
+		return closeGone
+	case st.err != "":
+		return closeFailed
+	case !settled(a.Live):
+		st.busy = true
+		return closeWrapping
+	case wroteSessionSince(a.Dir, st.at):
+		if err := s.closePane(a.Live.PaneID); err != nil {
+			st.err = "Close failed: " + err.Error()
+			return closeFailed
+		}
+		delete(s.closes, key)
+		return closeDone
+	case !st.busy && time.Since(st.at) < 20*time.Second:
+		// Settled with no log: give it a moment to start.
+		return closeWrapping
+	}
+	return closeStopped
 }
 
 // wroteSessionSince says whether a session log (or a task log) in the
