@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -24,6 +26,8 @@ type dashFlags struct {
 	fleet      bool
 	noColor    bool
 	width      int
+	web        bool
+	addr       string
 }
 
 func newDashCommand() *cobra.Command {
@@ -57,6 +61,8 @@ agents/CONVENTIONS.md, or the one given with --root.`,
 	cmd.Flags().BoolVar(&flags.printRoot, "print-root", false, "Print the workspace directory the dashboard would show and exit.")
 	cmd.Flags().BoolVar(&flags.noColor, "no-color", false, "Disable color.")
 	cmd.Flags().IntVar(&flags.width, "width", 0, "Output width for --once (default: terminal width, else 120).")
+	cmd.Flags().BoolVar(&flags.web, "web", false, "Serve the dashboard as a web page instead (read-only); with --fleet, every workspace.")
+	cmd.Flags().StringVar(&flags.addr, "addr", "127.0.0.1:7777", "With --web, the address to listen on.")
 	return cmd
 }
 
@@ -64,6 +70,9 @@ func runDash(cmd *cobra.Command, flags *dashFlags) error {
 	if flags.sidebar {
 		_, err := dash.ReportSidebar()
 		return err
+	}
+	if flags.web {
+		return runWeb(cmd, flags)
 	}
 	if flags.fleet {
 		return runFleet(cmd, flags)
@@ -163,6 +172,34 @@ func runFleet(cmd *cobra.Command, flags *dashFlags) error {
 		return nil
 	}
 	return dash.RunFleet(cmd.Context(), scan, wsScan, cmd.InOrStdin(), out, noColor, flags.all)
+}
+
+// runWeb serves the dashboard over HTTP: the fleet with --fleet, else the
+// one workspace dashRoot finds.
+func runWeb(cmd *cobra.Command, flags *dashFlags) error {
+	src := dash.WebSource{}
+	if flags.fleet {
+		src.FleetRoot = flags.root
+		if src.FleetRoot == "" {
+			src.FleetRoot = dash.DefaultFleetRoot()
+		}
+		if len(dash.FleetDirs(src.FleetRoot)) == 0 {
+			return fmt.Errorf("no agent workspaces under %s", src.FleetRoot)
+		}
+	} else {
+		root, err := dashRoot(flags.root)
+		if err != nil {
+			return err
+		}
+		src.Root = root
+	}
+	cache := dash.NewTranscriptCache()
+	src.Options = func(all bool) dash.Options {
+		return dash.Options{IncludeRetired: all, Herdr: dash.HerdrPanes, Transcripts: dash.DefaultTranscripts(), Cache: cache}
+	}
+	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	return dash.Serve(ctx, flags.addr, src, cmd.ErrOrStderr())
 }
 
 // dashRoot picks the workspace: --root when given; else, under a Herdr

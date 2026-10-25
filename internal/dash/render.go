@@ -271,23 +271,7 @@ func detail(ws *Workspace, a *Agent, width, maxItems int, showParked bool, st St
 	}
 	add(title)
 
-	facts := []string{harnessFact(ws, a)}
-	if a.Live != nil {
-		facts = append(facts, fmt.Sprintf("pane %s %s", a.Live.PaneID, a.Live.State()))
-	}
-	if !a.LastStarted.IsZero() {
-		facts = append(facts, "started "+a.LastStarted.Local().Format("Mon 02 Jan 15:04"))
-	}
-	if !a.LastActive.IsZero() {
-		if age := ws.Scanned.Sub(a.LastActive); age < time.Minute {
-			facts = append(facts, "active just now")
-		} else {
-			facts = append(facts, "last active "+humanAge(age)+" ago")
-		}
-	}
-	if !a.LastReviewed.IsZero() {
-		facts = append(facts, "tracker reviewed "+a.LastReviewed.Format("2006-01-02"))
-	}
+	facts := detailFacts(ws, a)
 	if len(facts) > 0 {
 		add(st.Dim.Render(strings.Join(facts, " · ")))
 	}
@@ -311,100 +295,57 @@ func detail(ws *Workspace, a *Agent, width, maxItems int, showParked bool, st St
 		}
 	}
 
+	sec := DetailSections(ws, a)
 	var plan []string
-	for _, step := range a.PlanSteps() {
+	for _, step := range sec.Plan {
 		plan = append(plan, fmt.Sprintf("  %-2s %s", step.Priority, step.Text))
 	}
 	section("Next session (agent's own plan)", st.Plan, plan)
 
-	// Each item shows in one section only: waiting on the principal, waiting
-	// on someone else, blocked, parked, or else open.
-	shownElsewhere := map[string]bool{}
 	var mine []string
-	for _, it := range a.ForPrincipal(ws.Principal) {
-		shownElsewhere[it.ID] = true
+	for _, it := range sec.Mine {
 		mine = append(mine, fmt.Sprintf("  %-2s #%-3s %s", it.Priority, strings.TrimPrefix(it.ID, "#"), it.Headline()))
 	}
-	if a.InboxUnprocessed > 0 {
-		mine = append(mine, fmt.Sprintf("  %d scheduled run(s) not yet read — start the agent to drain its inbox", a.InboxUnprocessed))
+	if sec.Inbox > 0 {
+		mine = append(mine, fmt.Sprintf("  %d scheduled run(s) not yet read — start the agent to drain its inbox", sec.Inbox))
 	}
 	section("Waiting on "+firstName(ws.Principal), st.Warn, mine)
 
-	byPriority := func(items []Item) []Item {
-		var out []Item
-		for _, p := range []string{"P1", "P2", "P3", ""} {
-			for _, it := range items {
-				if it.Priority == p || (p == "" && priorityRank(it.Priority) > 3) {
-					out = append(out, it)
-				}
-			}
-		}
-		return out
-	}
 	priorityLine := func(it Item) string {
 		return fmt.Sprintf("  %-2s ", it.Priority) + strings.TrimPrefix(itemLine(it, st), "  ")
 	}
-
-	var others []string
-	for _, it := range byPriority(a.WaitingOnOthers(ws.Principal)) {
-		if shownElsewhere[it.ID] {
-			continue
+	lines := func(items []Item) []string {
+		var out []string
+		for _, it := range items {
+			out = append(out, priorityLine(it))
 		}
-		shownElsewhere[it.ID] = true
-		others = append(others, priorityLine(it))
+		return out
 	}
-	section("Waiting on others ◆", st.Wait, others)
+	section("Waiting on others ◆", st.Wait, lines(sec.Others))
+	section("Blocked ■", st.Fail, lines(sec.Blocked))
 
-	var blocked []string
-	for _, it := range byPriority(a.BlockedItems()) {
-		shownElsewhere[it.ID] = true
-		blocked = append(blocked, priorityLine(it))
-	}
-	section("Blocked ■", st.Fail, blocked)
-
-	var live, parked []Item
-	for _, it := range a.Open {
-		switch {
-		case it.Parked():
-			parked = append(parked, it)
-		case !shownElsewhere[it.ID]:
-			live = append(live, it)
-		}
-	}
-
-	// Open: everything else, items under way before not started within each
-	// priority. The heading counts what this section holds.
-	c := map[string]int{}
-	for _, it := range live {
-		c[it.Priority]++
-	}
-	var ordered []Item
-	for _, notYet := range []bool{false, true} {
-		for _, it := range live {
-			if it.NotStarted() == notYet {
-				ordered = append(ordered, it)
-			}
-		}
-	}
+	// Open: the heading counts what this section holds.
 	var open []string
-	for _, it := range byPriority(ordered) {
+	for _, it := range sec.Open {
 		if maxItems > 0 && len(open) >= maxItems {
-			open = append(open, st.Dim.Render(fmt.Sprintf("  … %d more", len(live)-maxItems)))
+			open = append(open, st.Dim.Render(fmt.Sprintf("  … %d more", len(sec.Open)-maxItems)))
 			break
 		}
 		open = append(open, priorityLine(it))
 	}
+	c := sec.OpenCounts
 	section(fmt.Sprintf("Open actions — P1 %d · P2 %d · P3 %d", c["P1"], c["P2"], c["P3"]), st.Head, open)
 
 	// A capped (preview) list shows only the parked count; the full view
 	// lists them, or a hint when they are folded.
+	parked := sec.Parked
 	var shelf []string
 	if maxItems > 0 && len(parked) > 0 {
 		shelf = append(shelf, st.Dim.Render(fmt.Sprintf("  %d parked", len(parked))))
 	} else if !showParked && len(parked) > 0 {
 		shelf = append(shelf, st.Dim.Render("  p to show"))
 	} else {
-		for _, it := range byPriority(parked) {
+		for _, it := range parked {
 			line := fmt.Sprintf("  %-2s #%-3s %s", it.Priority, strings.TrimPrefix(it.ID, "#"), it.Headline())
 			if note := parkedNote(it.Status); note != "" {
 				line += "  " + note
@@ -446,6 +387,29 @@ func detail(ws *Workspace, a *Agent, width, maxItems int, showParked bool, st St
 		}
 	}
 	return out
+}
+
+// detailFacts are the agent's one-line facts under its name: harness, pane,
+// when it was started and last active, when its tracker was reviewed.
+func detailFacts(ws *Workspace, a *Agent) []string {
+	facts := []string{harnessFact(ws, a)}
+	if a.Live != nil {
+		facts = append(facts, fmt.Sprintf("pane %s %s", a.Live.PaneID, a.Live.State()))
+	}
+	if !a.LastStarted.IsZero() {
+		facts = append(facts, "started "+a.LastStarted.Local().Format("Mon 02 Jan 15:04"))
+	}
+	if !a.LastActive.IsZero() {
+		if age := ws.Scanned.Sub(a.LastActive); age < time.Minute {
+			facts = append(facts, "active just now")
+		} else {
+			facts = append(facts, "last active "+humanAge(age)+" ago")
+		}
+	}
+	if !a.LastReviewed.IsZero() {
+		facts = append(facts, "tracker reviewed "+a.LastReviewed.Format("2006-01-02"))
+	}
+	return facts
 }
 
 // harnessFact says which harness the agent opens in and where that is set,

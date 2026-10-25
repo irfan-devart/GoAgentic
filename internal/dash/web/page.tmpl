@@ -1,0 +1,137 @@
+{{define "page"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}} · GoAgentic</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<main id="main">{{template "main" .}}</main>
+<script>
+// Re-read the page every 5 seconds, as the TUI does, and swap in the new
+// <main>; paused while the tab is hidden or text is selected. Open
+// <details> stay open across the swap.
+setInterval(async () => {
+  if (document.hidden || String(getSelection())) return;
+  const open = [...document.querySelectorAll("details[open]")].map(d => d.dataset.key);
+  try {
+    const res = await fetch(location.href, {headers: {"X-Partial": "1"}});
+    if (!res.ok) return;
+    document.getElementById("main").innerHTML = await res.text();
+    for (const key of open) document.querySelector(`details[data-key="${CSS.escape(key)}"]`)?.setAttribute("open", "");
+  } catch (_) {}
+}, 5000);
+</script>
+</body>
+</html>{{end}}
+
+{{define "main"}}
+<nav class="crumbs">{{range $i, $c := .Crumbs}}{{if $i}}<span class="dim"> › </span>{{end}}{{if $c.Href}}<a href="{{$c.Href}}">{{$c.Name}}</a>{{else}}<span>{{$c.Name}}</span>{{end}}{{end}}</nav>
+{{if .Counts}}{{template "counts" .}}{{end}}
+{{if .Fleet}}{{template "fleet" .}}{{end}}
+{{if .Workspace}}{{template "workspace" .}}{{end}}
+{{if .Agent}}{{template "agent" .}}{{end}}
+{{with .File}}<h2>{{.Name}}</h2><pre class="file">{{.Text}}</pre>{{end}}
+<footer class="dim">Read-only · refreshes every 5 s · scanned {{.Scanned.Format "15:04:05"}} ·
+{{if .All}}<a href="?">hide retired</a>{{else}}<a href="?all=1">show retired</a>{{end}}</footer>
+{{end}}
+
+{{define "counts"}}{{$c := .Counts}}
+<header class="counts">
+  <h1>{{.Heading}}</h1>
+  <ul>
+    {{if .Live}}<li class="{{if $c.Live}}ok{{else}}dim{{end}}">● {{$c.Live}} live</li>{{end}}
+    <li class="{{if $c.ForYou}}foryou{{else}}dim{{end}}">✋ {{$c.ForYou}} for you</li>
+    <li class="{{if $c.Overdue}}blocked{{else}}dim{{end}}">⚑ {{$c.Overdue}} overdue</li>
+    <li class="{{if $c.Waiting}}waiting{{else}}dim{{end}}">◆ {{$c.Waiting}} P1 waiting on others</li>
+    <li class="{{if $c.Blocked}}blocked{{else}}dim{{end}}">■ {{$c.Blocked}} blocked</li>
+    <li class="{{if not $c.Health}}dim{{end}}">⚠ {{$c.Health}} health</li>
+  </ul>
+</header>
+{{end}}
+
+{{define "legend"}}
+<p class="legend dim"><span class="dot blocked"></span> blocked <span class="dot waiting"></span> P1 waiting on others <span class="dot foryou"></span> waiting on you <span class="dot working"></span> working · no dot: nothing to act on</p>
+{{end}}
+
+{{define "fleet"}}
+<div class="scroll"><table>
+<thead><tr><th></th><th>Workspace</th><th class="n">Agents</th><th class="n">Live</th><th class="n">For you</th><th class="n">Overdue</th><th class="n">Waiting</th><th class="n">Blocked</th><th class="n">Health</th><th>Needs you</th></tr></thead>
+<tbody>
+{{range .Fleet}}<tr>
+  <td><span class="dot {{.Tone}}"></span></td>
+  <td><a href="{{.Href}}">{{.Name}}</a></td>
+  <td class="n">{{.Counts.Agents}}</td>
+  <td class="n {{if .Counts.Live}}ok{{else}}dim{{end}}">{{.Live}}</td>
+  <td class="n {{if .Counts.ForYou}}foryou{{else}}dim{{end}}">{{.Counts.ForYou}}</td>
+  <td class="n {{if .Counts.Overdue}}blocked{{else}}dim{{end}}">{{.Counts.Overdue}}</td>
+  <td class="n {{if .Counts.Waiting}}waiting{{else}}dim{{end}}">{{.Counts.Waiting}}</td>
+  <td class="n {{if .Counts.Blocked}}blocked{{else}}dim{{end}}">{{.Counts.Blocked}}</td>
+  <td class="n {{if not .Counts.Health}}dim{{end}}">{{.Counts.Health}}</td>
+  <td class="needs">{{.NeedsYou}}</td>
+</tr>{{end}}
+</tbody></table></div>
+{{template "legend"}}
+{{end}}
+
+{{define "workspace"}}{{$first := .First}}
+{{with .Workspace}}
+{{if .Waiting}}<section class="waiting-you">
+<h2 class="foryou">Waiting on {{$first}}</h2>
+<ul class="items">{{range .Waiting}}<li{{if .First}} class="first"{{end}}><span class="who">{{if .First}}<a href="{{.AgentHref}}">{{.Agent}}</a>{{end}}</span> {{if .Item}}{{template "item" .Item}}{{else}}<span>{{.Text}}</span>{{end}}</li>{{end}}</ul>
+</section>{{end}}
+<div class="scroll"><table>
+<thead><tr><th></th><th>Agent</th><th>Harness</th><th>Live</th><th>Started</th><th>Health</th><th>Next up</th></tr></thead>
+<tbody>
+{{range .Rows}}<tr>
+  <td><span class="dot {{.Tone}}"></span></td>
+  <td><a href="{{.Href}}">{{.Agent}}</a></td>
+  <td class="dim">{{.Harness}}</td>
+  <td class="{{.LiveClass}}">{{.Live}}</td>
+  <td class="dim">{{.Started}}</td>
+  <td class="health-{{.Level}}">{{.Health}}</td>
+  <td class="next">{{.Next}}{{if .NextBlocked}} <span class="blocked">■ blocked</span>{{else if .NextWaiting}} <span class="{{if .NextP1}}waiting{{else}}dim{{end}}">◆ waiting</span>{{end}}</td>
+</tr>{{end}}
+</tbody></table></div>
+{{end}}
+{{template "legend"}}
+{{end}}
+
+{{define "item"}}<details class="item" data-key="{{.ID}}">
+<summary>{{if .Priority}}<span class="pri">{{.Priority}}</span> {{end}}<span class="id">#{{trimHash .ID}}</span> <span class="headline">{{.Headline}}</span>{{if .Note}} <span class="dim">{{.Note}}</span>{{end}}</summary>
+<div class="more">
+  {{if .Detail}}<p>{{.Detail}}</p>{{end}}
+  <p class="dim">{{if .Owner}}Owner {{.Owner}}{{end}}{{if .Status}} · {{.Status}}{{end}}{{if .Due}} · due {{.Due.Format "2006-01-02"}}{{end}}</p>
+  {{if .History}}<p><a href="{{.History}}">History note →</a></p>{{end}}
+</div>
+</details>{{end}}
+
+{{define "section"}}{{/* . is a list of webItem */}}{{if .}}<ul class="items">{{range .}}<li>{{template "item" .}}</li>{{end}}</ul>{{else}}<p class="dim none">None</p>{{end}}{{end}}
+
+{{define "agent"}}{{$first := .First}}
+{{with .Agent}}
+<h2 class="agent-name">{{.Name}}{{if .Title}} <span class="dim">— {{.Title}}</span>{{end}}</h2>
+<p class="dim facts">{{range $i, $f := .Facts}}{{if $i}} · {{end}}{{$f}}{{end}}</p>
+
+<section><h3 class="plan">Next session (agent's own plan)</h3>
+{{if .Plan}}<ol class="plan-steps">{{range .Plan}}<li>{{if .Priority}}<span class="pri">{{.Priority}}</span> {{end}}{{.Text}}</li>{{end}}</ol>{{else}}<p class="dim none">None</p>{{end}}</section>
+
+<section><h3 class="foryou">Waiting on {{$first}}</h3>
+{{template "section" .Mine}}
+{{if .Inbox}}<p>{{.Inbox}} scheduled run(s) not yet read — start the agent to drain its inbox</p>{{end}}</section>
+
+<section><h3 class="waiting">Waiting on others ◆</h3>{{template "section" .Others}}</section>
+<section><h3 class="blocked">Blocked ■</h3>{{template "section" .Blocked}}</section>
+<section><h3>Open actions — P1 {{index .OpenCounts "P1"}} · P2 {{index .OpenCounts "P2"}} · P3 {{index .OpenCounts "P3"}}</h3>{{template "section" .Open}}</section>
+<section class="parked"><details data-key="parked"><summary><h3 class="dim">Parked — {{len .Parked}}</h3></summary>{{template "section" .Parked}}</details></section>
+
+{{with .LastSession}}<section><h3>Last session</h3>
+<p>{{if not .Date.IsZero}}{{.Date.Format "Mon 02 Jan"}} — {{end}}<a href="{{$.Agent.SessionHref}}">{{.Title}}</a></p>
+{{if .Summary}}<p class="dim">{{.Summary}}</p>{{end}}</section>{{end}}
+
+<section>{{if .Health.Findings}}<h3 class="health-{{.Health.Level}}">Health {{.Health.Level.Symbol}}</h3>
+<ul>{{range .Health.Findings}}<li>{{.}}</li>{{end}}</ul>
+{{else}}<h3 class="ok">Health ✓ <span class="dim">{{.HealthLine}}</span></h3>{{end}}</section>
+{{end}}
+{{end}}

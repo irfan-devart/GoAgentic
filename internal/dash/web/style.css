@@ -1,0 +1,80 @@
+/* The TUI's palette: amber means waiting on you, orange a P1 waiting on
+   others, red blocked or failing, green working. */
+:root {
+  --bg: #fbfbfa; --fg: #1d1d1f; --dim: #74747a; --line: #e4e4e2; --hover: #f1f1ef;
+  --title: #5b4ad6; --ok: #1f9e6e; --foryou: #a87a12; --waiting: #c9621a;
+  --blocked: #d63b3b; --accent: #2f7fc6;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #16161a; --fg: #e6e6e6; --dim: #8a8a8f; --line: #2a2a30; --hover: #1f1f25;
+    --title: #9d91f5; --ok: #65d1a7; --foryou: #e5c07b; --waiting: #f0883e;
+    --blocked: #ff5f5f; --accent: #61afef;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #16161a; --fg: #e6e6e6; --dim: #8a8a8f; --line: #2a2a30; --hover: #1f1f25;
+  --title: #9d91f5; --ok: #65d1a7; --foryou: #e5c07b; --waiting: #f0883e;
+  --blocked: #ff5f5f; --accent: #61afef;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+main { max-width: 1200px; margin: 0 auto; padding: 16px; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+h1, h2, h3 { margin: 0; font-weight: 600; }
+h1 { font-size: 16px; color: var(--title); letter-spacing: .04em; }
+h2 { font-size: 15px; margin: 20px 0 6px; }
+h3 { font-size: 14px; margin: 18px 0 4px; }
+.dim { color: var(--dim); }
+.ok { color: var(--ok); } .accent { color: var(--accent); }
+.foryou { color: var(--foryou); } .waiting { color: var(--waiting); }
+.blocked { color: var(--blocked); font-weight: 600; }
+.plan { color: var(--ok); }
+.health-2 { color: var(--blocked); font-weight: 600; }
+.health-0 { color: var(--dim); }
+.crumbs { font-size: 13px; margin-bottom: 10px; }
+.counts { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 20px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.counts ul { display: flex; flex-wrap: wrap; gap: 4px 18px; list-style: none; margin: 0; padding: 0; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; margin-top: 12px; }
+th { text-align: left; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--dim); padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tbody tr:hover { background: var(--hover); }
+td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+td:first-child, th:first-child { width: 14px; padding-right: 0; }
+td.next { min-width: 280px; }
+td.needs { color: var(--foryou); }
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; vertical-align: middle; }
+.dot.blocked { background: var(--blocked); } .dot.waiting { background: var(--waiting); }
+.dot.foryou { background: var(--foryou); } .dot.working { background: var(--ok); }
+.legend { font-size: 12px; margin-top: 10px; }
+.legend .dot { margin-left: 10px; }
+.waiting-you { margin-top: 14px; }
+ul.items { list-style: none; margin: 0; padding: 0; }
+ul.items > li { padding: 3px 0; display: flex; gap: 8px; align-items: baseline; }
+ul.items .who { min-width: 80px; }
+.waiting-you li.first:not(:first-child) { border-top: 1px solid var(--line); margin-top: 4px; padding-top: 7px; }
+details.item { flex: 1; }
+details.item summary { cursor: pointer; list-style: none; }
+details.item summary::-webkit-details-marker { display: none; }
+details.item[open] summary .headline { font-weight: 600; }
+.more { margin: 4px 0 8px 2px; padding-left: 12px; border-left: 2px solid var(--line); }
+.more p { margin: 2px 0; }
+.pri { font-size: 12px; color: var(--dim); font-variant-numeric: tabular-nums; }
+.id { color: var(--dim); font-variant-numeric: tabular-nums; }
+.none { margin: 0; }
+.facts { margin: 2px 0 0; font-size: 13px; }
+.agent-name { font-size: 18px; color: var(--title); margin-top: 14px; }
+.plan-steps { margin: 0; padding-left: 22px; }
+.parked summary { cursor: pointer; }
+.parked summary h3 { display: inline; }
+pre.file { white-space: pre-wrap; word-break: break-word; background: var(--hover); padding: 12px; border-radius: 6px; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+footer { margin-top: 28px; font-size: 12px; }
+@media (max-width: 640px) {
+  ul.items > li { flex-direction: column; gap: 0; }
+  td.next { min-width: 200px; }
+}
