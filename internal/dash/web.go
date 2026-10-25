@@ -22,7 +22,8 @@ import (
 // through the same scan and the same section logic, so the two agree. It
 // writes two things, never a tracker: an answer to an item that waits on the
 // principal, appended to the agent's inbox (answers.go), and a message typed
-// into an agent's live session pane through Herdr (send).
+// into an agent's live session pane through Herdr (send). It can also start
+// a stopped agent in Herdr (start), as the TUI's enter does.
 
 //go:embed web/page.tmpl web/style.css
 var webFiles embed.FS
@@ -46,6 +47,8 @@ type WebSource struct {
 	// Prompt types text into a live pane and submits it; nil means
 	// `herdr agent prompt`.
 	Prompt func(pane, text string) error
+	// Launch starts a stopped agent; nil means LaunchInBackground.
+	Launch func(ws *Workspace, a *Agent) (string, error)
 }
 
 // Serve runs the web dashboard on addr until ctx ends.
@@ -85,11 +88,15 @@ type webServer struct {
 	// auto-refreshing tab or two must not pile them up.
 	mu   sync.Mutex
 	chat *ChatCache
+	// starting holds the agents (ws/agent) a Start is opening, so a second
+	// click or tab does not open a second session.
+	startMu  sync.Mutex
+	starting map[string]bool
 }
 
 // NewWebHandler returns the dashboard's routes.
 func NewWebHandler(src WebSource) http.Handler {
-	s := &webServer{src: src, chat: NewChatCache()}
+	s := &webServer{src: src, chat: NewChatCache(), starting: map[string]bool{}}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.home)
 	mux.HandleFunc("GET /w/{ws}", s.workspace)
@@ -97,6 +104,7 @@ func NewWebHandler(src WebSource) http.Handler {
 	mux.HandleFunc("GET /w/{ws}/{agent}/file", s.file)
 	mux.HandleFunc("POST /w/{ws}/{agent}/answer", s.answer)
 	mux.HandleFunc("POST /w/{ws}/{agent}/send", s.send)
+	mux.HandleFunc("POST /w/{ws}/{agent}/start", s.start)
 	mux.HandleFunc("GET /style.css", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/css; charset=utf-8")
 		data, _ := webFiles.ReadFile("web/style.css")
@@ -206,9 +214,14 @@ type webAgent struct {
 	ChatNote string
 	// CanSend: the agent's own session is running in a pane, so the page
 	// offers a send box posting to SendURL. SendNote says why not.
-	CanSend     bool
-	SendURL     string
-	SendNote    string
+	CanSend  bool
+	SendURL  string
+	SendNote string
+	// CanStart: the agent is not running, so the page offers a Start
+	// button posting to StartURL; Harness is what it starts in.
+	CanStart    bool
+	StartURL    string
+	Harness     string
 	SessionHref string
 	Health      Health
 	HealthLine  string
@@ -396,7 +409,18 @@ func (s *webServer) agent(w http.ResponseWriter, r *http.Request) {
 	if wa.CanSend, wa.SendNote = canSend(a); wa.CanSend {
 		wa.SendURL = "/w/" + ws.Name + "/" + a.Name + "/send"
 	}
+	if a.Live == nil || !a.Live.Running {
+		wa.Harness = harnessOf(ws, a)
+		if ok, why := HarnessAvailable(ws, wa.Harness); ok {
+			wa.CanStart, wa.StartURL = true, "/w/"+ws.Name+"/"+a.Name+"/start"
+			wa.SendNote = a.Name + " is not running."
+		} else {
+			wa.SendNote = a.Name + " is not running, and cannot start in " + wa.Harness + ": " + why + "."
+		}
+	}
 	switch {
+	case a.Transcript == "" && harnessOf(ws, a) != "claude":
+		wa.ChatNote = a.Name + " runs in " + harnessOf(ws, a) + "; the chat shows Claude Code sessions only."
 	case a.Transcript == "":
 		wa.ChatNote = "No Claude Code session of " + a.Name + " found in this workspace's transcripts."
 	default:
@@ -517,13 +541,59 @@ func (s *webServer) send(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// start opens a stopped agent in Herdr: a new tab in its workspace's Space
+// (or its leftover shell pane), running its start command, without moving
+// the principal's view. The agent then shows as live and the send box
+// appears.
+func (s *webServer) start(w http.ResponseWriter, r *http.Request) {
+	ws, a, ok := s.findAgent(w, r)
+	if !ok {
+		return
+	}
+	if a.Live != nil && a.Live.Running {
+		http.Error(w, a.Name+" is already running", http.StatusConflict)
+		return
+	}
+	if ok, why := HarnessAvailable(ws, harnessOf(ws, a)); !ok {
+		http.Error(w, why, http.StatusConflict)
+		return
+	}
+	key := ws.Name + "/" + a.Name
+	s.startMu.Lock()
+	busy := s.starting[key]
+	s.starting[key] = true
+	s.startMu.Unlock()
+	if busy {
+		http.Error(w, a.Name+" is already starting", http.StatusConflict)
+		return
+	}
+	defer func() {
+		s.startMu.Lock()
+		delete(s.starting, key)
+		s.startMu.Unlock()
+	}()
+	launch := s.src.Launch
+	if launch == nil {
+		launch = LaunchInBackground
+	}
+	if _, err := launch(ws, a); err != nil {
+		msg := err.Error()
+		if strings.Contains(msg, "not ready") || strings.Contains(msg, "blocked") {
+			msg += ". It is waiting on a prompt in its new pane (a folder-trust question, say): answer it there."
+		}
+		http.Error(w, msg, http.StatusBadGateway)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // canSend says whether the page may type into the agent's pane: only its
 // own session, running, and not waiting on a prompt in the pane. Otherwise
 // the reason, for the page.
 func canSend(a *Agent) (bool, string) {
 	switch {
 	case a.Live == nil || !a.Live.Running:
-		return false, a.Name + " is not running. Open it from the dashboard (TUI) or Herdr to talk to it."
+		return false, a.Name + " is not running."
 	case !sessionPane(a.Live):
 		return false, a.Name + " is open only as a peer or task pane; those answer their caller, not you."
 	case a.Live.Status == "blocked":

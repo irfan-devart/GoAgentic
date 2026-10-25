@@ -182,6 +182,12 @@ type LaunchStep struct {
 // where the agent is already running, start it again in its leftover shell
 // pane, or start it in a new tab of the current Space.
 func LaunchPlan(ws *Workspace, a *Agent, herdrWorkspace string) (summary string, steps []LaunchStep) {
+	return launchPlan(ws, a, herdrWorkspace, false)
+}
+
+// launchPlan is LaunchPlan; background opens the agent without moving the
+// principal's Herdr view (the web page's Start button).
+func launchPlan(ws *Workspace, a *Agent, herdrWorkspace string, background bool) (summary string, steps []LaunchStep) {
 	harness := harnessOf(ws, a)
 	name := strings.ToLower(a.Name)
 	var agentArgs []string
@@ -202,13 +208,20 @@ func LaunchPlan(ws *Workspace, a *Agent, herdrWorkspace string) (summary string,
 			{Args: []string{"agent", "focus", a.Live.PaneID}},
 		}
 	case a.Live != nil:
-		return "started " + a.Name + " (" + harness + ") in its pane", []LaunchStep{
+		steps = []LaunchStep{
 			{Args: start(a.Live.PaneID), Fallback: []string{"pane", "run", a.Live.PaneID,
 				executable(harness) + " " + strings.Join(typed, " ")}},
-			{Args: []string{"agent", "focus", a.Live.PaneID}},
 		}
+		if !background {
+			steps = append(steps, LaunchStep{Args: []string{"agent", "focus", a.Live.PaneID}})
+		}
+		return "started " + a.Name + " (" + harness + ") in its pane", steps
 	default:
-		tab := []string{"tab", "create", "--cwd", ws.Root, "--label", a.Name, "--focus"}
+		focus := "--focus"
+		if background {
+			focus = "--no-focus"
+		}
+		tab := []string{"tab", "create", "--cwd", ws.Root, "--label", a.Name, focus}
 		if herdrWorkspace != "" {
 			tab = append(tab, "--workspace", herdrWorkspace)
 		}
@@ -222,11 +235,45 @@ func LaunchPlan(ws *Workspace, a *Agent, herdrWorkspace string) (summary string,
 // Launch opens the agent in Herdr (see LaunchPlan) and returns a one-line
 // result for the status bar.
 func Launch(ws *Workspace, a *Agent) (string, error) {
+	return launch(ws, a, os.Getenv("HERDR_WORKSPACE_ID"), false)
+}
+
+// LaunchInBackground opens a stopped agent for the web page: in a new tab
+// of the Herdr Space the workspace's panes are in (else the current one),
+// leaving the principal's view where it is.
+func LaunchInBackground(ws *Workspace, a *Agent) (string, error) {
+	space := os.Getenv("HERDR_WORKSPACE_ID")
+	if panes, err := listHerdrPanes(herdrBin()); err == nil {
+		if id := spaceOf(sidebarRoots(panes), ws.Root); id != "" {
+			space = id
+		}
+	}
+	return launch(ws, a, space, true)
+}
+
+// spaceOf is the Herdr Space whose panes sit mostly in root; the lowest id
+// when there are several.
+func spaceOf(roots map[string]string, root string) string {
+	same := func(a, b string) bool {
+		ra, ea := filepath.EvalSymlinks(a)
+		rb, eb := filepath.EvalSymlinks(b)
+		return filepath.Clean(a) == filepath.Clean(b) || (ea == nil && eb == nil && ra == rb)
+	}
+	best := ""
+	for id, r := range roots {
+		if r != "" && same(r, root) && (best == "" || id < best) {
+			best = id
+		}
+	}
+	return best
+}
+
+func launch(ws *Workspace, a *Agent, space string, background bool) (string, error) {
 	if os.Getenv("HERDR_ENV") != "1" && os.Getenv("HERDR_BIN_PATH") == "" {
 		return "", ErrNoHerdr
 	}
 	bin := herdrBin()
-	summary, steps := LaunchPlan(ws, a, os.Getenv("HERDR_WORKSPACE_ID"))
+	summary, steps := launchPlan(ws, a, space, background)
 	newPane := ""
 	for _, step := range steps {
 		args := step.Args

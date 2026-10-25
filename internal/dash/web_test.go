@@ -1,6 +1,7 @@
 package dash
 
 import (
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -385,5 +386,106 @@ func TestWebSendTypesIntoTheLivePane(t *testing.T) {
 	fail.Prompt = func(string, string) error { return os.ErrDeadlineExceeded }
 	if code, _ := post(t, NewWebHandler(fail), "/w/alpha/Sigrid/send", url.Values{"text": {"x"}}, "X-GoAgentic", "1"); code != http.StatusBadGateway {
 		t.Errorf("failed prompt = %d, want 502", code)
+	}
+}
+
+func TestWebStartOpensAStoppedAgent(t *testing.T) {
+	defer func(orig func(string) (string, error)) { lookPath = orig }(lookPath)
+	lookPath = func(cli string) (string, error) { return "/bin/" + cli, nil }
+	parent := webFleet(t)
+	var started []string
+	launch := func(ws *Workspace, a *Agent) (string, error) {
+		started = append(started, ws.Name+"/"+a.Name)
+		return "started", nil
+	}
+	h := NewWebHandler(WebSource{FleetRoot: parent, Options: webOptions, Launch: launch})
+
+	_, body := get(t, h, "/w/alpha/Sigrid")
+	if !strings.Contains(body, `action="/w/alpha/Sigrid/start"`) || !strings.Contains(body, "Start Sigrid") {
+		t.Fatalf("a stopped agent's page lacks Start:\n%s", body)
+	}
+	if code, msg := post(t, h, "/w/alpha/Sigrid/start", nil, "X-GoAgentic", "1"); code != http.StatusNoContent {
+		t.Fatalf("start = %d %s", code, msg)
+	}
+	if len(started) != 1 || started[0] != "alpha/Sigrid" {
+		t.Errorf("launched = %q", started)
+	}
+	if code, _ := post(t, h, "/w/alpha/Sigrid/start", nil); code != http.StatusForbidden {
+		t.Errorf("start without the header = %d", code)
+	}
+
+	// Running: no Start, and a forced post is refused.
+	live := NewWebHandler(WebSource{FleetRoot: parent, Options: livePanes(parent, "sigrid", "Sigrid - Lead", "idle"), Launch: launch})
+	if _, body := get(t, live, "/w/alpha/Sigrid"); strings.Contains(body, "/start") {
+		t.Error("a running agent must not offer Start")
+	}
+	if code, _ := post(t, live, "/w/alpha/Sigrid/start", nil, "X-GoAgentic", "1"); code != http.StatusConflict {
+		t.Errorf("start while running = %d", code)
+	}
+	// A leftover shell pane is not running: Start reuses it (LaunchPlan).
+	shell := NewWebHandler(WebSource{FleetRoot: parent, Options: livePanes(parent, "sigrid", "", ""), Launch: launch})
+	if code, _ := post(t, shell, "/w/alpha/Sigrid/start", nil, "X-GoAgentic", "1"); code != http.StatusNoContent {
+		t.Errorf("start from a shell pane = %d", code)
+	}
+
+	// A start that stops at a prompt says where to answer it.
+	stuck := NewWebHandler(WebSource{FleetRoot: parent, Options: webOptions, Launch: func(*Workspace, *Agent) (string, error) {
+		return "", errors.New("herdr agent start: agent sigrid is blocked during startup and is not ready for prompts")
+	}})
+	if code, msg := post(t, stuck, "/w/alpha/Sigrid/start", nil, "X-GoAgentic", "1"); code != http.StatusBadGateway || !strings.Contains(msg, "answer it there") {
+		t.Errorf("stuck start = %d %s", code, msg)
+	}
+
+	// A second click while the first is still opening is refused.
+	entered, release := make(chan struct{}), make(chan struct{})
+	slow := NewWebHandler(WebSource{FleetRoot: parent, Options: webOptions, Launch: func(*Workspace, *Agent) (string, error) {
+		close(entered)
+		<-release
+		return "started", nil
+	}})
+	done := make(chan int)
+	go func() { code, _ := post(t, slow, "/w/alpha/Sigrid/start", nil, "X-GoAgentic", "1"); done <- code }()
+	<-entered
+	if code, _ := post(t, slow, "/w/alpha/Sigrid/start", nil, "X-GoAgentic", "1"); code != http.StatusConflict {
+		t.Errorf("a second start while one is opening = %d, want 409", code)
+	}
+	close(release)
+	if code := <-done; code != http.StatusNoContent {
+		t.Errorf("first start = %d", code)
+	}
+
+	// No CLI for its harness: no Start, the page says why.
+	lookPath = func(string) (string, error) { return "", exec.ErrNotFound }
+	if _, body := get(t, h, "/w/alpha/Sigrid"); strings.Contains(body, "/start") || !strings.Contains(body, "cannot start in claude: claude not installed") {
+		t.Errorf("no harness CLI: page must explain, not offer Start:\n%s", body)
+	}
+}
+
+func TestLaunchInBackgroundLeavesTheViewAlone(t *testing.T) {
+	_, steps := launchPlan(&Workspace{Root: "/ws"}, &Agent{Name: "Varro"}, "w3", true)
+	if got := strings.Join(steps[0].Args, " "); got != "tab create --cwd /ws --label Varro --no-focus --workspace w3" {
+		t.Errorf("tab = %s", got)
+	}
+	_, steps = launchPlan(&Workspace{Root: "/ws"}, &Agent{Name: "Varro", Live: &LivePane{PaneID: "w3:p1"}}, "w3", true)
+	for _, s := range steps {
+		if s.Args[0] == "agent" && s.Args[1] == "focus" {
+			t.Error("a background start must not focus the pane")
+		}
+	}
+	roots := map[string]string{"w1": "/other", "w5": "/ws", "w2": "/ws/", "w9": ""}
+	if got := spaceOf(roots, "/ws"); got != "w2" {
+		t.Errorf("space = %q, want the lowest id of those in /ws", got)
+	}
+	if got := spaceOf(roots, "/nowhere"); got != "" {
+		t.Errorf("space for an unknown root = %q", got)
+	}
+}
+
+func TestWebChatNoteNamesAnotherHarness(t *testing.T) {
+	parent := webFleet(t)
+	write(t, filepath.Join(parent, "alpha/agents/CONVENTIONS.md"), "---\nprincipal: Norman Noble\nharness: codex\n---\n")
+	_, body := get(t, NewWebHandler(WebSource{FleetRoot: parent, Options: webOptions}), "/w/alpha/Sigrid")
+	if !strings.Contains(body, "Sigrid runs in codex; the chat shows Claude Code sessions only.") {
+		t.Errorf("chat note for a codex agent:\n%s", body)
 	}
 }
