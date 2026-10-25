@@ -103,8 +103,10 @@ func Scan(root string, opts Options) (*Workspace, error) {
 	sort.Strings(dirs)
 
 	dirty := uncommittedByPath(root)
+	schedule := loadSchedule(agentsDir, opts.Now)
 	for _, dir := range dirs {
 		a := loadAgent(dir, ws.Principal, opts.Now)
+		a.Scheduled = schedule[strings.ToLower(a.Name)]
 		if a.Retired && !opts.IncludeRetired {
 			continue
 		}

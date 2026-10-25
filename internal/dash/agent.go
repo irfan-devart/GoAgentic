@@ -42,7 +42,9 @@ type Agent struct {
 	// picked up.
 	InboxUnprocessed int
 	Answers          map[string][]Answer
-	Uncommitted      int
+	// Scheduled is the agent's tasks in the workspace's task register.
+	Scheduled   []ScheduledTask
+	Uncommitted int
 	// Unwrapped: the tracker changed after the newest session log and was
 	// never committed, so a session ended without a wrap.
 	Unwrapped bool

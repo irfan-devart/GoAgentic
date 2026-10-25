@@ -42,6 +42,7 @@ var styleVersion = func() string {
 var webTemplate = template.Must(template.New("page.tmpl").Funcs(template.FuncMap{
 	"trimHash":     func(id string) string { return strings.TrimPrefix(id, "#") },
 	"trimPlan":     func(next string) string { return strings.TrimPrefix(next, "» ") },
+	"plural":       plural,
 	"styleVersion": func() string { return styleVersion },
 }).ParseFS(webFiles, "web/page.tmpl"))
 
@@ -272,11 +273,14 @@ type webAgent struct {
 	Active            bool
 	State, StateClass string
 	// Activity is the harness's own status line while it works.
-	Activity    *activity
-	Plan        []PlanStep
-	Mine        []webItem
-	Answered    []webItem
-	Inbox       int
+	Activity *activity
+	Plan     []PlanStep
+	Mine     []webItem
+	Answered []webItem
+	Inbox    int
+	// Scheduled is its tasks in the register; SchedMissed: one missed a run.
+	Scheduled   []webTask
+	SchedMissed bool
 	Others      []webItem
 	Blocked     []webItem
 	Open        []webItem
@@ -500,11 +504,14 @@ func (s *webServer) agent(w http.ResponseWriter, r *http.Request) {
 	wa := &webAgent{
 		Name: a.Name, Title: a.Title,
 		Initial: strings.ToUpper(a.Name[:1]), Hue: avatarHue(a.Name),
-		Plan: sec.Plan, Mine: items(sec.Mine), Answered: items(sec.Answered), Inbox: sec.Inbox,
+		Plan: sec.Plan, Mine: items(sec.Mine), Answered: items(sec.Answered), Inbox: sec.Inbox, Scheduled: webTasks(ws.Scanned, a.Scheduled),
 		Others: items(sec.Others), Blocked: items(sec.Blocked), Open: items(sec.Open),
 		OpenCounts: sec.OpenCounts, Parked: items(sec.Parked), Health: a.Health,
 		HealthLine: fmt.Sprintf("standing %d/%d · sessions %d/%d · actions %d KB",
 			len(a.Standing), maxStanding, len(a.Sessions), maxSessions, a.ActionsSize/1024),
+	}
+	for _, t := range wa.Scheduled {
+		wa.SchedMissed = wa.SchedMissed || t.Missed != ""
 	}
 	wa.ChatLive = a.Live != nil && a.Live.Running
 	if wa.CanSend, wa.SendNote = canSend(a); wa.CanSend {
