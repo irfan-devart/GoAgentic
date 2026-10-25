@@ -47,6 +47,8 @@ type WebSource struct {
 	// Prompt types text into a live pane and submits it; nil means
 	// `herdr agent prompt`.
 	Prompt func(pane, text string) error
+	// CodexHome holds codex's sessions; "" means CodexHome().
+	CodexHome string
 	// Launch starts a stopped agent; nil means LaunchInBackground.
 	Launch func(ws *Workspace, a *Agent) (string, error)
 }
@@ -243,6 +245,9 @@ type webAgent struct {
 	LoadingText string
 	Prompt      bool
 	StartError  string
+	// readable: the chat came from a session the page can read, which
+	// says when a start is done; otherwise the pane settling does.
+	readable    bool
 	SessionHref string
 	Health      Health
 	HealthLine  string
@@ -545,26 +550,40 @@ func (s *webServer) send(w http.ResponseWriter, r *http.Request) {
 }
 
 // readChat fills the chat from the session running in the agent's pane:
-// for Claude Code the transcript Herdr names, so an earlier session never
-// shows as this one. A session still on its start-up turn shows loading.
+// for Claude Code the transcript Herdr names, for codex the agent's newest
+// session in the workspace (begun after a Start from this page, if there
+// was one), so an earlier session never shows as this one. A session still
+// on its start-up turn shows loading.
 func (s *webServer) readChat(ws *Workspace, a *Agent, wa *webAgent) {
-	path := a.Transcript
-	if id := a.Live.ClaudeSession(); id != "" {
+	path := ""
+	switch {
+	case a.Live.ClaudeSession() != "":
 		dir := filepath.Dir(a.Transcript)
 		if a.Transcript == "" {
 			dir = filepath.Join(s.src.Options(true).Transcripts, projectDirName(ws.Root))
 		}
-		path = filepath.Join(dir, id+".jsonl")
-		if !fileExists(path) {
-			wa.Loading, wa.LoadingText = true, "Starting "+a.Name+"…"
-			return
+		path = filepath.Join(dir, a.Live.ClaudeSession()+".jsonl")
+	case a.Live.Agent == "codex":
+		home := s.src.CodexHome
+		if home == "" {
+			home = CodexHome()
 		}
-	} else if a.Live.Agent != "claude" {
-		wa.ChatNote = a.Name + " runs in " + a.Live.Agent + "; the chat shows Claude Code sessions only."
+		// A session that began before this page's Start is an earlier one.
+		path = CodexSession(home, ws.Root, a.Name, s.launchedAt(ws, a).Add(-30*time.Second))
+	case a.Live.Agent == "claude":
+		path = a.Transcript // a Herdr too old to name the session
+	default:
+		wa.ChatNote = a.Name + " runs in " + a.Live.Agent + "; the chat reads Claude Code and codex sessions only."
 		return
 	}
-	if path == "" {
-		wa.ChatNote = "No Claude Code session of " + a.Name + " found in this workspace's transcripts."
+	wa.readable = true
+	if path == "" || !fileExists(path) {
+		wa.Loading, wa.LoadingText = true, "Starting "+a.Name+"…"
+		if settled(a.Live) && s.launchedAt(ws, a).IsZero() {
+			// Not starting: it is running a session this page cannot find.
+			wa.Loading, wa.LoadingText = false, ""
+			wa.ChatNote = "No session of " + a.Name + " found in this workspace's transcripts."
+		}
 		return
 	}
 	entries, err := s.chat.Chat(path, a.Name)
@@ -583,10 +602,20 @@ func (s *webServer) readChat(ws *Workspace, a *Agent, wa *webAgent) {
 		}
 		wa.Chat = append(wa.Chat, wc)
 	}
-	// Started with /agents:start and no reply yet: still loading.
-	if !replied && len(entries) > 0 && strings.HasPrefix(entries[0].Text, "/agents:start") && !settled(a.Live) {
+	// Started with its start command and no reply yet: still loading.
+	if !replied && len(entries) > 0 && isStartText(entries[0].Text) && !settled(a.Live) {
 		wa.Loading, wa.LoadingText = true, "Starting "+a.Name+"…"
 	}
+}
+
+// launchedAt is when this page last started the agent, or zero.
+func (s *webServer) launchedAt(ws *Workspace, a *Agent) time.Time {
+	s.startMu.Lock()
+	defer s.startMu.Unlock()
+	if st := s.launches[ws.Name+"/"+a.Name]; st != nil {
+		return st.at
+	}
+	return time.Time{}
 }
 
 // applyLaunch shows a Start in progress: loading until the agent is up and
@@ -614,8 +643,8 @@ func (s *webServer) applyLaunch(ws *Workspace, a *Agent, wa *webAgent) {
 		return
 	case !st.done || !live:
 		wa.Loading, wa.LoadingText = true, "Starting "+a.Name+"…"
-	case a.Live.ClaudeSession() == "" && (!settled(a.Live) || time.Since(st.doneAt) < 5*time.Second):
-		// No transcript to watch: wait for the pane to settle.
+	case !wa.readable && (!settled(a.Live) || time.Since(st.doneAt) < 5*time.Second):
+		// No session to watch: wait for the pane to settle.
 		wa.Loading, wa.LoadingText = true, "Starting "+a.Name+"…"
 	}
 	if !wa.Loading && live {

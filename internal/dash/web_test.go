@@ -2,6 +2,7 @@ package dash
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -543,11 +544,90 @@ func TestLaunchInBackgroundLeavesTheViewAlone(t *testing.T) {
 	}
 }
 
-func TestWebChatNoteNamesAnotherHarness(t *testing.T) {
+// codexRollout writes a codex session for agent in cwd, begun at start,
+// with the given extra lines.
+func codexRollout(t *testing.T, home, name, cwd, source string, start time.Time, lines ...string) {
+	t.Helper()
+	day := time.Now()
+	meta := fmt.Sprintf(`{"timestamp":%q,"type":"session_meta","payload":{"id":"x","timestamp":%q,"cwd":%q,"thread_source":%q,"base_instructions":{"text":"You are Codex"}}}`,
+		start.Format(time.RFC3339), start.Format(time.RFC3339), cwd, source)
+	write(t, filepath.Join(home, "sessions", day.Format("2006/01/02"), "rollout-"+name+".jsonl"), meta+"\n"+strings.Join(lines, "\n")+"\n")
+}
+
+func codexMsg(at, role, text string) string {
+	kind := "input_text"
+	if role == "assistant" {
+		kind = "output_text"
+	}
+	return fmt.Sprintf(`{"timestamp":%q,"type":"response_item","payload":{"type":"message","role":%q,"content":[{"type":%q,"text":%q}]}}`, at, role, kind, text)
+}
+
+func TestWebCodexChat(t *testing.T) {
 	parent := webFleet(t)
+	root := filepath.Join(parent, "alpha")
+	home := t.TempDir()
+	at := time.Now().Add(-time.Hour)
+	injected := codexMsg("2026-10-25T06:08:03Z", "user", "# AGENTS.md instructions for "+root)
+	codexRollout(t, home, "2026-10-25T13-00-00-old", root, "user", at.Add(-time.Hour),
+		injected, codexMsg("2026-10-25T05:00:03Z", "user", "$agents-start sigrid"), codexMsg("2026-10-25T05:00:09Z", "assistant", "An older session."))
+	codexRollout(t, home, "2026-10-25T14-08-02-now", root, "user", at,
+		injected,
+		codexMsg("2026-10-25T06:08:03Z", "user", "$agents-start sigrid"),
+		codexMsg("2026-10-25T06:08:03Z", "user", "<skill>\n<name>agents-start</name>"),
+		`{"timestamp":"2026-10-25T06:08:07Z","type":"response_item","payload":{"type":"custom_tool_call","name":"exec","input":"text(await tools.exec_command({cmd:\"cat agents/sigrid/soul.md\"}))"}}`,
+		`{"timestamp":"2026-10-25T06:08:08Z","type":"response_item","payload":{"type":"reasoning","summary":[{"text":"secret reasoning"}]}}`,
+		codexMsg("2026-10-25T06:09:07Z", "assistant", "Loaded, Norman. Focus: **#5**."))
+	codexRollout(t, home, "2026-10-25T14-08-12-guardian", root, "guardian_review", at.Add(time.Minute),
+		codexMsg("2026-10-25T06:08:13Z", "user", "$agents-start sigrid"), codexMsg("2026-10-25T06:08:15Z", "assistant", `{"risk_level":"low"}`))
+	codexRollout(t, home, "2026-10-25T15-00-00-elsewhere", t.TempDir(), "user", at.Add(2*time.Minute),
+		codexMsg("2026-10-25T07:00:03Z", "user", "$agents-start sigrid"), codexMsg("2026-10-25T07:00:09Z", "assistant", "Another workspace."))
+
 	pane := &LivePane{Name: "sigrid", PaneID: "w1:p7", Agent: "codex", Status: "idle", Running: true}
-	_, body := get(t, NewWebHandler(WebSource{FleetRoot: parent, Options: paneOpts(parent, "", &pane)}), "/w/alpha/Sigrid")
-	if !strings.Contains(body, "Sigrid runs in codex; the chat shows Claude Code sessions only.") {
-		t.Errorf("chat note for a codex agent:\n%s", body)
+	h := NewWebHandler(WebSource{FleetRoot: parent, Options: paneOpts(parent, "", &pane), CodexHome: home})
+	_, body := get(t, h, "/w/alpha/Sigrid")
+	for _, want := range []string{"$agents-start sigrid", "Loaded, Norman. Focus: <strong>#5</strong>.", "⚙ exec", "cat agents/sigrid/soul.md", `action="/w/alpha/Sigrid/send"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("codex chat lacks %q", want)
+		}
+	}
+	for _, not := range []string{"An older session.", "risk_level", "Another workspace.", "AGENTS.md instructions", "agents-start</name>", "secret reasoning", "Claude Code sessions only"} {
+		if strings.Contains(body, not) {
+			t.Errorf("codex chat must not show %q", not)
+		}
+	}
+
+	// Started from this page: a session begun before the Start is an
+	// earlier one, so it loads until the new session replies.
+	defer func(orig func(string) (string, error)) { lookPath = orig }(lookPath)
+	lookPath = func(cli string) (string, error) { return "/bin/" + cli, nil }
+	var stopped *LivePane
+	h = NewWebHandler(WebSource{FleetRoot: parent, Options: paneOpts(parent, "", &stopped), CodexHome: home,
+		Launch: func(*Workspace, *Agent) (string, error) { return "started", nil }})
+	post(t, h, "/w/alpha/Sigrid/start", nil, "X-GoAgentic", "1")
+	time.Sleep(20 * time.Millisecond)
+	stopped = &LivePane{Name: "sigrid", PaneID: "w1:p8", Agent: "codex", Status: "working", Running: true}
+	if _, body := get(t, h, "/w/alpha/Sigrid"); !strings.Contains(body, `class="loading"`) || strings.Contains(body, "Loaded, Norman") {
+		t.Errorf("starting: the earlier codex session must not show:\n%s", body)
+	}
+	codexRollout(t, home, "2026-10-25T16-00-00-new", root, "user", time.Now(),
+		codexMsg("2026-10-25T08:00:03Z", "user", "$agents-start sigrid"))
+	if _, body := get(t, h, "/w/alpha/Sigrid"); !strings.Contains(body, `class="loading"`) {
+		t.Error("the new session has not replied yet: still loading")
+	}
+	f, _ := os.OpenFile(filepath.Join(home, "sessions", time.Now().Format("2006/01/02"), "rollout-2026-10-25T16-00-00-new.jsonl"), os.O_APPEND|os.O_WRONLY, 0o644)
+	f.WriteString(codexMsg("2026-10-25T08:00:30Z", "assistant", "Fresh start.") + "\n")
+	f.Close()
+	stopped.Status = "idle"
+	if _, body := get(t, h, "/w/alpha/Sigrid"); strings.Contains(body, `class="loading"`) || !strings.Contains(body, "Fresh start.") || strings.Contains(body, "Loaded, Norman") {
+		t.Errorf("ready: want the new codex session only:\n%s", body)
+	}
+}
+
+func TestWebOtherHarnessSaysSo(t *testing.T) {
+	parent := webFleet(t)
+	pane := &LivePane{Name: "sigrid", PaneID: "w1:p7", Agent: "pi", Status: "idle", Running: true}
+	_, body := get(t, NewWebHandler(WebSource{FleetRoot: parent, Options: paneOpts(parent, "", &pane), CodexHome: t.TempDir()}), "/w/alpha/Sigrid")
+	if !strings.Contains(body, "Sigrid runs in pi; the chat reads Claude Code and codex sessions only.") {
+		t.Errorf("chat note for a pi agent:\n%s", body)
 	}
 }

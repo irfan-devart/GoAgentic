@@ -16,8 +16,8 @@ import (
 	"time"
 )
 
-// The chat view: an agent's latest Claude Code session, read from its
-// transcript, as the conversation the principal sees in the terminal. Only
+// The chat view: an agent's running session, read from its Claude Code
+// transcript or codex rollout (codex.go), as the conversation the principal sees in the terminal. Only
 // what was said is shown: the principal's messages and the agent's replies.
 // Thinking, tool output and injected context are left out; tool calls fold
 // into one line between messages.
@@ -49,6 +49,9 @@ type chatFile struct {
 	// /agents:start switched to, so one transcript can hold two agents.
 	entries []chatLine
 	agent   string
+	// codex: the file is a codex rollout (its first line is the session
+	// meta), not a Claude Code transcript.
+	codex bool
 }
 
 type chatLine struct {
@@ -82,7 +85,7 @@ func (c *ChatCache) Chat(path, agent string) ([]ChatEntry, error) {
 	// The agent's session starts at its last start in this file.
 	start := 0
 	for i, l := range cf.entries {
-		if l.Kind == "you" && l.agent == agent && strings.HasPrefix(l.Text, "/agents:start") {
+		if l.Kind == "you" && l.agent == agent && isStartText(l.Text) {
 			start = i
 		}
 	}
@@ -115,7 +118,14 @@ func (cf *chatFile) read(path string) error {
 		if err != nil {
 			break // EOF, or a partial line kept for later
 		}
+		if cf.offset == 0 && bytes.Contains(line, []byte(`"type":"session_meta"`)) {
+			cf.codex = true
+		}
 		cf.offset += int64(len(line))
+		if cf.codex {
+			cf.addCodex(line)
+			continue
+		}
 		cf.add(line)
 	}
 	return nil

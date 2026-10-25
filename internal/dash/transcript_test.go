@@ -88,7 +88,7 @@ func TestWebAgentPageShowsTheSession(t *testing.T) {
 	}
 	h := NewWebHandler(WebSource{FleetRoot: parent, Options: func(bool) Options { return Options{Now: now, Herdr: pane} }})
 	_, body := get(t, h, "/w/alpha/Sigrid")
-	if !strings.Contains(body, "No Claude Code session of Sigrid found") {
+	if !strings.Contains(body, "No session of Sigrid found") {
 		t.Error("live without a transcript: the page must say so")
 	}
 
