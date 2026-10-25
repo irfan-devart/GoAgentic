@@ -229,7 +229,10 @@ type agentRow struct {
 
 type webAgent struct {
 	Name, Title string
-	Facts       []string
+	Facts       []webFact
+	// Initial and Hue make the header's tile.
+	Initial string
+	Hue     int
 	// Active: a session is running or starting, so the page leads with the
 	// chat; otherwise with the tracker. State says what the session does.
 	Active            bool
@@ -455,7 +458,8 @@ func (s *webServer) agent(w http.ResponseWriter, r *http.Request) {
 		return out
 	}
 	wa := &webAgent{
-		Name: a.Name, Title: a.Title, Facts: detailFacts(ws, a),
+		Name: a.Name, Title: a.Title, Facts: webFacts(ws, a),
+		Initial: strings.ToUpper(a.Name[:1]), Hue: avatarHue(a.Name),
 		Plan: sec.Plan, Mine: items(sec.Mine), Answered: items(sec.Answered), Inbox: sec.Inbox,
 		Others: items(sec.Others), Blocked: items(sec.Blocked), Open: items(sec.Open),
 		OpenCounts: sec.OpenCounts, Parked: items(sec.Parked), Health: a.Health,
@@ -668,7 +672,7 @@ func (s *webServer) readChat(ws *Workspace, a *Agent, wa *webAgent) {
 		wc := webChat{ChatEntry: e}
 		switch e.Kind {
 		case "you":
-			wc.Text, wc.Images = s.chatImages(e.Text)
+			wc.Text, wc.Images = s.chatImages(unwrapPaste(e.Text))
 		case "agent":
 			wc.HTML = chatMarkdown(e.Text)
 			replied = true

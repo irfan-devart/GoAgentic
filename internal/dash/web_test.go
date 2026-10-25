@@ -933,3 +933,28 @@ func TestChatShowsSentScreenshots(t *testing.T) {
 		}
 	}
 }
+
+func TestUnwrapPaste(t *testing.T) {
+	in := "<pasted_content id=\"20a3\">\nLooks better.\n\nNow the header.\n</pasted_content id=\"20a3\">"
+	if got := unwrapPaste(in); got != "Looks better.\n\nNow the header." {
+		t.Errorf("unwrapPaste = %q", got)
+	}
+	if got := unwrapPaste("see <pasted_content> inline"); got != "see <pasted_content> inline" {
+		t.Errorf("inline mention changed: %q", got)
+	}
+}
+
+func TestShortDay(t *testing.T) {
+	now := time.Date(2026, 10, 25, 23, 0, 0, 0, time.Local)
+	for day, want := range map[time.Time]string{
+		time.Date(2026, 10, 25, 0, 0, 0, 0, time.UTC): "today",
+		time.Date(2026, 10, 24, 0, 0, 0, 0, time.UTC): "yesterday",
+		time.Date(2026, 10, 22, 0, 0, 0, 0, time.UTC): "Thursday",
+		time.Date(2026, 10, 14, 0, 0, 0, 0, time.UTC): "14 Oct",
+		time.Date(2025, 12, 1, 0, 0, 0, 0, time.UTC):  "1 Dec 2025",
+	} {
+		if got := shortDay(now, day); got != want {
+			t.Errorf("shortDay(%s) = %q, want %q", day.Format("2006-01-02"), got, want)
+		}
+	}
+}

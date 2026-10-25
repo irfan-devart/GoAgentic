@@ -156,3 +156,12 @@ func imageExtOf(name string) string {
 	}
 	return ""
 }
+
+// pasteTagRe is the wrapper Claude Code records around pasted text, which
+// is how Herdr delivers a message typed into a pane.
+var pasteTagRe = regexp.MustCompile(`(?m)^\s*</?pasted_content\b[^>]*>\s*$\n?`)
+
+// unwrapPaste is a sent message without the paste wrapper.
+func unwrapPaste(text string) string {
+	return strings.TrimSpace(pasteTagRe.ReplaceAllString(text, ""))
+}
