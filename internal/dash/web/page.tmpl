@@ -226,7 +226,7 @@ main.addEventListener("keydown", e => {
   <textarea name="text" rows="2" maxlength="4000" placeholder="Message {{.Name}}" aria-label="Message {{.Name}}"></textarea>
   <div class="row"><button type="submit">Send</button> <span class="dim hint">⌘/Ctrl-Enter · typed into its pane</span> <span class="status"></span></div>
 </form>{{if and .CloseURL (not .WrapStopped)}}<form class="answer close" method="post" action="{{.CloseURL}}">
-  <div class="row"><button type="submit" class="quiet">Wrap &amp; close</button> <span class="dim hint">Runs its wrap, then closes the pane.</span> <span class="status{{if .CloseError}} error{{end}}">{{.CloseError}}</span></div>
+  <div class="row"><button type="submit" class="quiet"{{if .Busy}} disabled{{end}}>Wrap &amp; close</button> <span class="dim hint">{{if .Busy}}{{.Name}} is busy — wrap when it has finished.{{else}}Runs its wrap, then closes the pane.{{end}}</span> <span class="status{{if .CloseError}} error{{end}}">{{.CloseError}}</span></div>
 </form>{{end}}{{else if .CanStart}}<form class="answer start" method="post" action="{{.StartURL}}">
   <div class="row"><button type="submit">Start {{.Name}}</button> <span class="dim hint">Opens it in a new Herdr tab ({{.Harness}}) and runs its start; your view stays put.</span> <span class="status{{if .StartError}} error{{end}}">{{.StartError}}</span></div>
 </form>{{else}}<p class="dim send-note">{{.SendNote}}</p>{{end}}

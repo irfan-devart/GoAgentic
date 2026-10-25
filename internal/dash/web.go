@@ -261,6 +261,7 @@ type webAgent struct {
 	// Wrapping: a Wrap & close is running; WrapStopped: the agent stopped
 	// without writing its session log, so the page offers Close anyway.
 	CloseURL    string
+	Busy        bool
 	Wrapping    bool
 	WrapStopped bool
 	CloseError  string
@@ -755,6 +756,10 @@ func (s *webServer) close(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, why, http.StatusConflict)
 		return
 	}
+	if !settled(a.Live) {
+		http.Error(w, a.Name+" is busy; wrap it when it has finished its turn", http.StatusConflict)
+		return
+	}
 	s.startMu.Lock()
 	if st := s.closes[key]; st != nil && st.err == "" {
 		s.startMu.Unlock()
@@ -796,6 +801,7 @@ func (s *webServer) applyClose(ws *Workspace, a *Agent, wa *webAgent) {
 	live := a.Live != nil && a.Live.Running
 	if live && sessionPane(a.Live) && !wa.Loading {
 		wa.CloseURL = "/w/" + ws.Name + "/" + a.Name + "/close"
+		wa.Busy = !settled(a.Live)
 	}
 	key := ws.Name + "/" + a.Name
 	s.startMu.Lock()
