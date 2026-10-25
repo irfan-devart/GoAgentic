@@ -54,6 +54,9 @@ type WebSource struct {
 	// OrderFile keeps the sidebar's order; "" means dash-order.json in the
 	// user's config folder (web_order.go).
 	OrderFile string
+	// UploadDir keeps images sent with a message; "" means
+	// goagentic/uploads in the user's cache folder (web_images.go).
+	UploadDir string
 	// ReadPane is a pane's last lines; nil means `herdr pane read`.
 	ReadPane func(pane string) (string, error)
 	// Launch starts a stopped agent; nil means LaunchInBackground.
@@ -142,6 +145,7 @@ func NewWebHandler(src WebSource) http.Handler {
 	mux.HandleFunc("POST /w/{ws}/{agent}/start", s.start)
 	mux.HandleFunc("POST /w/{ws}/{agent}/close", s.close)
 	mux.HandleFunc("POST /order", s.reorder)
+	mux.HandleFunc("GET /uploads/{name}", s.upload)
 	mux.HandleFunc("GET /style.css", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/css; charset=utf-8")
 		data, _ := webFiles.ReadFile("web/style.css")
@@ -284,6 +288,8 @@ type webChat struct {
 	ChatEntry
 	HTML    template.HTML
 	Summary string
+	// Images are the screenshots sent with a message, as page links.
+	Images []string
 }
 
 type webItem struct {
@@ -579,9 +585,18 @@ func (s *webServer) send(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/") {
+		r.Body = http.MaxBytesReader(w, r.Body, (maxImages+1)*maxImageBytes)
+		if err := r.ParseMultipartForm(16 << 20); err != nil {
+			http.Error(w, "could not read the message: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		defer r.MultipartForm.RemoveAll()
+	}
 	text := strings.TrimSpace(r.FormValue("text"))
+	images := r.MultipartForm != nil && len(r.MultipartForm.File["image"]) > 0
 	switch {
-	case text == "":
+	case text == "" && !images:
 		http.Error(w, "nothing to send", http.StatusBadRequest)
 		return
 	case r.FormValue("id") != "":
@@ -595,6 +610,12 @@ func (s *webServer) send(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, why, http.StatusConflict)
 		return
 	}
+	paths, err := s.saveImages(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	text = withImages(text, paths)
 	prompt := s.src.Prompt
 	if prompt == nil {
 		prompt = herdrPrompt
@@ -645,6 +666,8 @@ func (s *webServer) readChat(ws *Workspace, a *Agent, wa *webAgent) {
 	for _, e := range entries {
 		wc := webChat{ChatEntry: e}
 		switch e.Kind {
+		case "you":
+			wc.Text, wc.Images = s.chatImages(e.Text)
 		case "agent":
 			wc.HTML = chatMarkdown(e.Text)
 			replied = true

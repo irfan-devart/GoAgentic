@@ -17,7 +17,9 @@
 const main = document.getElementById("main");
 let inflight = 0; // a post is waiting on the server: its form must stay
 let dragging = null; // a sidebar row being dragged into a new place
-const busy = () => inflight || dragging || document.hidden || String(getSelection()) || document.activeElement?.tagName === "SELECT" ||
+// Screenshots waiting to go with the next message; they outlive refreshes.
+let pending = [];
+const busy = () => inflight || dragging || pending.length || document.hidden || String(getSelection()) || document.activeElement?.tagName === "SELECT" ||
   [...main.querySelectorAll("textarea")].some(t => t.value.trim() || (t === document.activeElement && !t.closest("form.send")));
 // The chat follows new messages while you are at its bottom, and stays put
 // while you read further up.
@@ -44,6 +46,7 @@ async function refresh(force) {
   if (typing) main.querySelector("form.send textarea")?.focus();
   for (const key of open) main.querySelector(`details[data-key="${CSS.escape(key)}"]`)?.setAttribute("open", "");
   chatRestore(st);
+  renderThumbs();
 }
 // Every 5 s, or every 1.5 s while an agent is starting, so its chat shows
 // as soon as it is ready.
@@ -68,16 +71,17 @@ main.addEventListener("submit", async e => {
   if (!form) return;
   e.preventDefault();
   if (form.dataset.confirm && !confirm(form.dataset.confirm)) return;
-  const button = form.querySelector("button"), status = form.querySelector(".status");
+  const button = form.querySelector("button[type=submit]"), status = form.querySelector(".status");
   button.disabled = true;
   status.classList.remove("error");
   status.textContent = form.classList.contains("start") ? "Starting…" : form.classList.contains("close") ? "Wrapping up…" : "Sending…";
   inflight++;
   try {
-    const res = await fetch(form.action, {method: "POST", headers: {"X-GoAgentic": "1"}, body: new URLSearchParams(new FormData(form))});
+    const res = await fetch(form.action, {method: "POST", headers: {"X-GoAgentic": "1"}, body: sendBody(form)});
     if (!res.ok) throw new Error((await res.text()).trim() || res.statusText);
     const ta = form.querySelector("textarea");
     if (ta) ta.value = "";
+    if (form.classList.contains("send")) { pending = []; renderThumbs(); }
     if (form.classList.contains("send")) document.getElementById("chat")?.scrollTo(0, 1e9);
     await refresh(true);
   } catch (err) {
@@ -87,6 +91,63 @@ main.addEventListener("submit", async e => {
   } finally {
     inflight--;
   }
+});
+// The send box takes screenshots: dropped anywhere on the page, pasted into
+// it, or picked with the clip. They show as thumbnails until sent.
+const images = files => [...files].filter(f => /^image\/(png|jpeg|gif|webp)$/.test(f.type));
+function addImages(files) {
+  const add = images(files);
+  if (!add.length || !main.querySelector("form.send")) return false;
+  pending = pending.concat(add).slice(0, 6);
+  renderThumbs();
+  main.querySelector("form.send textarea")?.focus();
+  return true;
+}
+function renderThumbs() {
+  const box = main.querySelector("form.send .thumbs");
+  if (!box) return;
+  for (const img of box.querySelectorAll("img")) URL.revokeObjectURL(img.src);
+  box.replaceChildren(...pending.map((f, i) => {
+    const t = document.createElement("span");
+    t.className = "thumb";
+    const img = document.createElement("img");
+    img.src = URL.createObjectURL(f);
+    img.alt = f.name || "screenshot";
+    const x = document.createElement("button");
+    x.type = "button";
+    x.textContent = "×";
+    x.title = "Remove";
+    x.onclick = () => { pending.splice(i, 1); renderThumbs(); };
+    t.append(img, x);
+    return t;
+  }));
+}
+function sendBody(form) {
+  const data = new FormData(form);
+  data.delete("image");
+  if (!form.classList.contains("send") || !pending.length) return new URLSearchParams(data);
+  for (const f of pending) data.append("image", f, f.name || "screenshot.png");
+  return data;
+}
+const hasFiles = e => [...(e.dataTransfer?.types || [])].includes("Files");
+main.addEventListener("dragover", e => {
+  if (!hasFiles(e) || !main.querySelector("form.send")) return;
+  e.preventDefault();
+  main.querySelector(".composer")?.classList.add("dropping");
+});
+main.addEventListener("dragleave", e => {
+  if (!e.relatedTarget) main.querySelector(".composer")?.classList.remove("dropping");
+});
+main.addEventListener("drop", e => {
+  if (!hasFiles(e)) return;
+  main.querySelector(".composer")?.classList.remove("dropping");
+  if (addImages(e.dataTransfer.files)) e.preventDefault();
+});
+main.addEventListener("paste", e => {
+  if (e.target.matches?.("form.send textarea") && addImages(e.clipboardData?.files || [])) e.preventDefault();
+});
+main.addEventListener("change", e => {
+  if (e.target.matches("form.send .attach input")) { addImages(e.target.files); e.target.value = ""; }
 });
 // Drag a workspace or an agent in the sidebar to reorder it; the order is
 // saved on the server, so every browser shows it.
@@ -270,7 +331,7 @@ main.addEventListener("keydown", e => {
 {{else if .WrapStopped}}<p class="ended"><strong>{{.Name}} stopped before its wrap finished</strong> (no session log written). Read its last message below; answer it, or close anyway.</p>
 {{end}}<div class="chat" id="chat">
 {{if .ChatNote}}<p class="dim">{{.ChatNote}}</p>{{end}}
-{{range .Chat}}{{if eq .Kind "you"}}<div class="msg you"><div class="bubble">{{.Text}}</div><time>{{.At.Local.Format "15:04"}}</time></div>
+{{range .Chat}}{{if eq .Kind "you"}}<div class="msg you"><div class="bubble">{{.Text}}{{with .Images}}<span class="shots">{{range .}}<a href="{{.}}" target="_blank"><img src="{{.}}" alt="screenshot" loading="lazy"></a>{{end}}</span>{{end}}</div><time>{{.At.Local.Format "15:04"}}</time></div>
 {{else if eq .Kind "agent"}}<div class="msg agent"><div class="bubble">{{.HTML}}</div><time>{{.At.Local.Format "15:04"}}</time></div>
 {{else}}<details class="tools" data-key="tools-{{.At.UnixNano}}"><summary>⚙ {{.Summary}}</summary><ul>{{range .Tools}}<li>{{.}}</li>{{end}}</ul></details>
 {{end}}{{end}}
@@ -278,8 +339,9 @@ main.addEventListener("keydown", e => {
 </div>
 {{else}}<p class="ended"><strong>Not running</strong>{{if not .LastEnded.IsZero}} · last session ended {{.LastEnded.Local.Format "Mon 15:04"}}{{end}}{{with .SessionHref}} (<a href="{{.}}">log →</a>){{end}}</p>
 {{end}}{{if or .Loading .Prompt .Wrapping}}{{else if .CanSend}}<div class="composer"><form class="answer send" method="post" action="{{.SendURL}}">
-  <textarea name="text" rows="2" maxlength="4000" placeholder="Message {{.Name}}" aria-label="Message {{.Name}}"></textarea>
-  <div class="row"><button type="submit">Send</button> <span class="dim hint">⌘/Ctrl-Enter · typed into its pane</span> <span class="status"></span></div>
+  <textarea name="text" rows="2" maxlength="4000" placeholder="Message {{.Name}} — drop or paste screenshots" aria-label="Message {{.Name}}"></textarea>
+  <div class="thumbs"></div>
+  <div class="row"><button type="submit">Send</button> <label class="attach" title="Add screenshots">📎<input type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden></label> <span class="dim hint">⌘/Ctrl-Enter · typed into its pane; images go as file paths</span> <span class="status"></span></div>
 </form></div>{{else if .CanStart}}<form class="answer start" method="post" action="{{.StartURL}}">
   <div class="row"><button type="submit">Start {{.Name}}</button> <span class="dim hint">Opens it in a new Herdr tab ({{.Harness}}) and runs its start; your view stays put.</span> <span class="status{{if .StartError}} error{{end}}">{{.StartError}}</span></div>
 </form>{{else}}<p class="dim send-note">{{.SendNote}}</p>{{end}}

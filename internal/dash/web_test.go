@@ -1,9 +1,11 @@
 package dash
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -868,6 +870,66 @@ func TestWebShowsTheHarnessStatusLine(t *testing.T) {
 	for _, path := range []string{"/w/alpha", "/w/alpha/Sigrid"} {
 		if _, body := get(t, h, path); !strings.Contains(body, `<span class="activity">Percolating…</span> <span class="dim">26s · ↓ 482 tokens</span>`) {
 			t.Errorf("%s lacks the status line", path)
+		}
+	}
+}
+
+func TestWebSendTakesScreenshots(t *testing.T) {
+	parent := webFleet(t)
+	var sent []string
+	uploads := filepath.Join(t.TempDir(), "uploads")
+	h := NewWebHandler(WebSource{FleetRoot: parent, Options: livePanes(parent, "sigrid", "Sigrid - Lead", "idle"), UploadDir: uploads,
+		Prompt: func(_, text string) error { sent = append(sent, text); return nil }})
+	png := append([]byte("\x89PNG\r\n\x1a\n"), make([]byte, 64)...)
+	send := func(text string, files map[string][]byte) (int, string) {
+		var body bytes.Buffer
+		mw := multipart.NewWriter(&body)
+		if text != "" {
+			_ = mw.WriteField("text", text)
+		}
+		for name, data := range files {
+			fw, _ := mw.CreateFormFile("image", name)
+			_, _ = fw.Write(data)
+		}
+		_ = mw.Close()
+		req := localReq("POST", "/w/alpha/Sigrid/send", &body)
+		req.Header.Set("Content-Type", mw.FormDataContentType())
+		req.Header.Set("X-GoAgentic", "1")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec.Code, rec.Body.String()
+	}
+	if code, msg := send("What is wrong here?", map[string][]byte{"shot.png": png}); code != http.StatusNoContent {
+		t.Fatalf("send = %d %s", code, msg)
+	}
+	saved, _ := filepath.Glob(filepath.Join(uploads, "*.png"))
+	if len(saved) != 1 || len(sent) != 1 || sent[0] != "What is wrong here?\n[Image: "+saved[0]+"]" {
+		t.Fatalf("saved %v, prompted %q", saved, sent)
+	}
+	if data, _ := os.ReadFile(saved[0]); !bytes.Equal(data, png) {
+		t.Error("the saved image differs from the one sent")
+	}
+	// An image alone is a message; a file that is not an image is refused.
+	if code, _ := send("", map[string][]byte{"only.png": png}); code != http.StatusNoContent || !strings.HasPrefix(sent[1], "[Image: ") {
+		t.Errorf("image alone = %d, prompted %q", code, sent)
+	}
+	if code, _ := send("x", map[string][]byte{"evil.png": []byte("#!/bin/sh\nrm -rf /\n")}); code != http.StatusBadRequest || len(sent) != 2 {
+		t.Errorf("non-image = %d, prompted %q", code, sent)
+	}
+}
+
+func TestChatShowsSentScreenshots(t *testing.T) {
+	dir := t.TempDir()
+	s := &webServer{src: WebSource{UploadDir: dir}}
+	text, links := s.chatImages("Look:\n[Image: " + dir + "/20261025-a1.png]\n[Image: /etc/passwd]")
+	if text != "Look:\n[Image: /etc/passwd]" || len(links) != 1 || links[0] != "/uploads/20261025-a1.png" {
+		t.Errorf("chatImages = %q %v", text, links)
+	}
+	_ = os.WriteFile(filepath.Join(dir, "a.png"), append([]byte("\x89PNG\r\n\x1a\n"), make([]byte, 8)...), 0o600)
+	h := NewWebHandler(WebSource{FleetRoot: webFleet(t), Options: webOptions, UploadDir: dir})
+	for path, want := range map[string]int{"/uploads/a.png": 200, "/uploads/..%2Fx.png": 404, "/uploads/a.txt": 404, "/uploads/b.png": 404} {
+		if code, _ := get(t, h, path); code != want {
+			t.Errorf("GET %s = %d, want %d", path, code, want)
 		}
 	}
 }
