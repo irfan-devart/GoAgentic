@@ -78,12 +78,13 @@ type webServer struct {
 	src WebSource
 	// mu keeps scans one at a time: each asks Herdr and git, and an
 	// auto-refreshing tab or two must not pile them up.
-	mu sync.Mutex
+	mu   sync.Mutex
+	chat *ChatCache
 }
 
 // NewWebHandler returns the dashboard's routes.
 func NewWebHandler(src WebSource) http.Handler {
-	s := &webServer{src: src}
+	s := &webServer{src: src, chat: NewChatCache()}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /{$}", s.home)
 	mux.HandleFunc("GET /w/{ws}", s.workspace)
@@ -192,9 +193,20 @@ type webAgent struct {
 	OpenCounts  map[string]int
 	Parked      []webItem
 	LastSession *Session
+	// Chat is the latest session as a conversation; ChatLive says it is
+	// still running in a pane.
+	Chat        []webChat
+	ChatLive    bool
+	ChatNote    string
 	SessionHref string
 	Health      Health
 	HealthLine  string
+}
+
+type webChat struct {
+	ChatEntry
+	HTML    template.HTML
+	Summary string
 }
 
 type webItem struct {
@@ -368,6 +380,26 @@ func (s *webServer) agent(w http.ResponseWriter, r *http.Request) {
 		OpenCounts: sec.OpenCounts, Parked: items(sec.Parked), Health: a.Health,
 		HealthLine: fmt.Sprintf("standing %d/%d · sessions %d/%d · actions %d KB",
 			len(a.Standing), maxStanding, len(a.Sessions), maxSessions, a.ActionsSize/1024),
+	}
+	wa.ChatLive = a.Live != nil && a.Live.Running
+	switch {
+	case a.Transcript == "":
+		wa.ChatNote = "No Claude Code session of " + a.Name + " found in this workspace's transcripts."
+	default:
+		entries, err := s.chat.Chat(a.Transcript, a.Name)
+		if err != nil {
+			wa.ChatNote = "Could not read the session: " + err.Error()
+		}
+		for _, e := range entries {
+			wc := webChat{ChatEntry: e}
+			switch e.Kind {
+			case "agent":
+				wc.HTML = chatMarkdown(e.Text)
+			case "tools":
+				wc.Summary = ToolSummary(e.Tools)
+			}
+			wa.Chat = append(wa.Chat, wc)
+		}
 	}
 	if last, ok := a.LastSession(); ok {
 		wa.LastSession = &last

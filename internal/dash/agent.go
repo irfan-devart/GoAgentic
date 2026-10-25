@@ -49,7 +49,9 @@ type Agent struct {
 
 	LastStarted time.Time
 	LastActive  time.Time
-	Live        *LivePane
+	// Transcript is the Claude Code transcript of the latest session.
+	Transcript string
+	Live       *LivePane
 
 	Health Health
 }

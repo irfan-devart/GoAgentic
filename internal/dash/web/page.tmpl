@@ -15,12 +15,25 @@
 const main = document.getElementById("main");
 const busy = () => document.hidden || String(getSelection()) ||
   [...main.querySelectorAll("textarea")].some(t => t.value.trim() || t === document.activeElement);
+// The chat follows new messages while you are at its bottom, and stays put
+// while you read further up.
+const chatState = () => {
+  const c = document.getElementById("chat");
+  return c && {top: c.scrollTop, bottom: c.scrollHeight - c.scrollTop - c.clientHeight < 40};
+};
+const chatRestore = st => {
+  const c = document.getElementById("chat");
+  if (c) c.scrollTop = !st || st.bottom ? c.scrollHeight : st.top;
+};
+chatRestore(null);
 async function refresh() {
   const open = [...main.querySelectorAll("details[open]")].map(d => d.dataset.key);
   const res = await fetch(location.href, {headers: {"X-Partial": "1"}});
   if (!res.ok) return;
+  const st = chatState();
   main.innerHTML = await res.text();
   for (const key of open) main.querySelector(`details[data-key="${CSS.escape(key)}"]`)?.setAttribute("open", "");
+  chatRestore(st);
 }
 setInterval(() => { if (!busy()) refresh().catch(() => {}); }, 5000);
 
@@ -142,6 +155,7 @@ main.addEventListener("keydown", e => {
 
 {{define "agent"}}{{$first := .First}}
 {{with .Agent}}
+<div class="agent-grid"><div class="detail">
 <h2 class="agent-name">{{.Name}}{{if .Title}} <span class="dim">— {{.Title}}</span>{{end}}</h2>
 <p class="dim facts">{{range $i, $f := .Facts}}{{if $i}} · {{end}}{{$f}}{{end}}</p>
 
@@ -164,5 +178,17 @@ main.addEventListener("keydown", e => {
 <section>{{if .Health.Findings}}<h3 class="health-{{.Health.Level}}">Health {{.Health.Level.Symbol}}</h3>
 <ul>{{range .Health.Findings}}<li>{{.}}</li>{{end}}</ul>
 {{else}}<h3 class="ok">Health ✓ <span class="dim">{{.HealthLine}}</span></h3>{{end}}</section>
+</div>
+<aside class="chat-pane">
+<h3>Session {{if .ChatLive}}<span class="ok">● live</span>{{else}}<span class="dim">— latest, not running</span>{{end}}</h3>
+<div class="chat" id="chat">
+{{if .ChatNote}}<p class="dim">{{.ChatNote}}</p>{{end}}
+{{range .Chat}}{{if eq .Kind "you"}}<div class="msg you"><div class="bubble">{{.Text}}</div><time>{{.At.Local.Format "15:04"}}</time></div>
+{{else if eq .Kind "agent"}}<div class="msg agent"><div class="bubble">{{.HTML}}</div><time>{{.At.Local.Format "15:04"}}</time></div>
+{{else}}<details class="tools" data-key="tools-{{.At.UnixNano}}"><summary>⚙ {{.Summary}}</summary><ul>{{range .Tools}}<li>{{.}}</li>{{end}}</ul></details>
+{{end}}{{end}}
+</div>
+<p class="dim chat-foot">Read from the Claude Code transcript; thinking and tool output are left out. Reply in the agent's pane.</p>
+</aside></div>
 {{end}}
 {{end}}

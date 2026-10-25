@@ -131,6 +131,7 @@ func Scan(root string, opts Options) (*Workspace, error) {
 			if s, ok := starts[strings.ToLower(a.Name)]; ok {
 				a.LastStarted = s.Started
 				a.LastActive = s.Active
+				a.Transcript = s.Path
 			}
 		}
 	}

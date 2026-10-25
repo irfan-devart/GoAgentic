@@ -109,6 +109,8 @@ type Start struct {
 	// Active is the transcript's last write: roughly when the session last
 	// did anything.
 	Active time.Time
+	// Path is the transcript of that session.
+	Path string
 }
 
 // TranscriptCache remembers what each transcript file said so a refresh only
@@ -168,7 +170,7 @@ func (c *TranscriptCache) Starts(projectDir string) map[string]Start {
 		for _, s := range e.starts {
 			cur := out[s.name]
 			if s.at.After(cur.Started) {
-				cur.Started, cur.Active = s.at, e.mtime
+				cur.Started, cur.Active, cur.Path = s.at, e.mtime, path
 			}
 			out[s.name] = cur
 		}
