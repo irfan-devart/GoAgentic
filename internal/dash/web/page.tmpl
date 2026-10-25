@@ -12,9 +12,11 @@
 // Re-read the page every 5 seconds, as the TUI does, and swap in the new
 // <main>. Paused while the tab is hidden, text is selected, or an answer is
 // being written, so a refresh never eats a draft. Open <details> stay open.
+// An empty chat box keeps refreshing, so replies show while you wait, and
+// keeps its focus.
 const main = document.getElementById("main");
 const busy = () => document.hidden || String(getSelection()) ||
-  [...main.querySelectorAll("textarea")].some(t => t.value.trim() || t === document.activeElement);
+  [...main.querySelectorAll("textarea")].some(t => t.value.trim() || (t === document.activeElement && !t.closest("form.send")));
 // The chat follows new messages while you are at its bottom, and stays put
 // while you read further up.
 const chatState = () => {
@@ -26,19 +28,23 @@ const chatRestore = st => {
   if (c) c.scrollTop = !st || st.bottom ? c.scrollHeight : st.top;
 };
 chatRestore(null);
-async function refresh() {
+async function refresh(force) {
   const open = [...main.querySelectorAll("details[open]")].map(d => d.dataset.key);
   const res = await fetch(location.href, {headers: {"X-Partial": "1"}});
   if (!res.ok) return;
-  const st = chatState();
-  main.innerHTML = await res.text();
+  const html = await res.text();
+  if (!force && busy()) return; // started typing while it loaded
+  const st = chatState(), typing = document.activeElement?.closest("form.send");
+  main.innerHTML = html;
+  if (typing) main.querySelector("form.send textarea")?.focus();
   for (const key of open) main.querySelector(`details[data-key="${CSS.escape(key)}"]`)?.setAttribute("open", "");
   chatRestore(st);
 }
 setInterval(() => { if (!busy()) refresh().catch(() => {}); }, 5000);
 
-// An answer posts with the X-GoAgentic header (the server refuses writes
-// without it), then the page refreshes to show it.
+// An answer or a chat message posts with the X-GoAgentic header (the server
+// refuses writes without it), then the page refreshes to show it. A sent
+// message shows in the chat once the agent's transcript has it.
 main.addEventListener("submit", async e => {
   const form = e.target.closest("form.answer");
   if (!form) return;
@@ -50,7 +56,8 @@ main.addEventListener("submit", async e => {
     const res = await fetch(form.action, {method: "POST", headers: {"X-GoAgentic": "1"}, body: new URLSearchParams(new FormData(form))});
     if (!res.ok) throw new Error((await res.text()).trim() || res.statusText);
     form.querySelector("textarea").value = "";
-    await refresh();
+    if (form.classList.contains("send")) document.getElementById("chat")?.scrollTo(0, 1e9);
+    await refresh(true);
   } catch (err) {
     status.textContent = err.message;
     button.disabled = false;
@@ -70,7 +77,7 @@ main.addEventListener("keydown", e => {
 {{if .Workspace}}{{template "workspace" .}}{{end}}
 {{if .Agent}}{{template "agent" .}}{{end}}
 {{with .File}}<h2>{{.Name}}</h2><pre class="file">{{.Text}}</pre>{{end}}
-<footer class="dim">Answers go to the agent's inbox; trackers are never edited · refreshes every 5 s · scanned {{.Scanned.Format "15:04:05"}} ·
+<footer class="dim">Answers go to the agent's inbox, messages to its live pane; trackers are never edited · refreshes every 5 s · scanned {{.Scanned.Format "15:04:05"}} ·
 {{if .All}}<a href="?">hide retired</a>{{else}}<a href="?all=1">show retired</a>{{end}}</footer>
 {{end}}
 
@@ -188,7 +195,11 @@ main.addEventListener("keydown", e => {
 {{else}}<details class="tools" data-key="tools-{{.At.UnixNano}}"><summary>⚙ {{.Summary}}</summary><ul>{{range .Tools}}<li>{{.}}</li>{{end}}</ul></details>
 {{end}}{{end}}
 </div>
-<p class="dim chat-foot">Read from the Claude Code transcript; thinking and tool output are left out. Reply in the agent's pane.</p>
+{{if .CanSend}}<form class="answer send" method="post" action="{{.SendURL}}">
+  <textarea name="text" rows="2" maxlength="4000" placeholder="Message {{.Name}}" aria-label="Message {{.Name}}"></textarea>
+  <div class="row"><button type="submit">Send</button> <span class="dim hint">⌘/Ctrl-Enter · typed into its pane</span> <span class="status"></span></div>
+</form>{{else}}<p class="dim send-note">{{.SendNote}}</p>{{end}}
+<p class="dim chat-foot">Read from the Claude Code transcript; thinking and tool output are left out.</p>
 </aside></div>
 {{end}}
 {{end}}

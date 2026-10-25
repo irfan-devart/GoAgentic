@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -18,9 +19,10 @@ import (
 )
 
 // The web dashboard: the same picture as the TUI, served as HTML. It reads
-// through the same scan and the same section logic, so the two agree. The
-// one write is an answer to an item that waits on the principal, appended to
-// the agent's inbox (answers.go); trackers are never edited.
+// through the same scan and the same section logic, so the two agree. It
+// writes two things, never a tracker: an answer to an item that waits on the
+// principal, appended to the agent's inbox (answers.go), and a message typed
+// into an agent's live session pane through Herdr (send).
 
 //go:embed web/page.tmpl web/style.css
 var webFiles embed.FS
@@ -41,6 +43,9 @@ type WebSource struct {
 	ListenHost string
 	// Now stamps answers; nil means time.Now.
 	Now func() time.Time
+	// Prompt types text into a live pane and submits it; nil means
+	// `herdr agent prompt`.
+	Prompt func(pane, text string) error
 }
 
 // Serve runs the web dashboard on addr until ctx ends.
@@ -55,7 +60,7 @@ func Serve(ctx context.Context, addr string, src WebSource, log io.Writer) error
 	srv := &http.Server{Handler: NewWebHandler(src), ReadHeaderTimeout: 10 * time.Second}
 	fmt.Fprintf(log, "Dashboard on http://%s/ — Ctrl-C to stop.\n", ln.Addr())
 	if src.ListenHost != "" {
-		fmt.Fprintln(log, "Not a loopback address: anyone who can reach it can read every tracker shown and answer as you.")
+		fmt.Fprintln(log, "Not a loopback address: anyone who can reach it can read every tracker shown, answer as you, and type into your agents' sessions.")
 	}
 	go func() {
 		<-ctx.Done()
@@ -91,6 +96,7 @@ func NewWebHandler(src WebSource) http.Handler {
 	mux.HandleFunc("GET /w/{ws}/{agent}", s.agent)
 	mux.HandleFunc("GET /w/{ws}/{agent}/file", s.file)
 	mux.HandleFunc("POST /w/{ws}/{agent}/answer", s.answer)
+	mux.HandleFunc("POST /w/{ws}/{agent}/send", s.send)
 	mux.HandleFunc("GET /style.css", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/css; charset=utf-8")
 		data, _ := webFiles.ReadFile("web/style.css")
@@ -195,9 +201,14 @@ type webAgent struct {
 	LastSession *Session
 	// Chat is the latest session as a conversation; ChatLive says it is
 	// still running in a pane.
-	Chat        []webChat
-	ChatLive    bool
-	ChatNote    string
+	Chat     []webChat
+	ChatLive bool
+	ChatNote string
+	// CanSend: the agent's own session is running in a pane, so the page
+	// offers a send box posting to SendURL. SendNote says why not.
+	CanSend     bool
+	SendURL     string
+	SendNote    string
 	SessionHref string
 	Health      Health
 	HealthLine  string
@@ -382,6 +393,9 @@ func (s *webServer) agent(w http.ResponseWriter, r *http.Request) {
 			len(a.Standing), maxStanding, len(a.Sessions), maxSessions, a.ActionsSize/1024),
 	}
 	wa.ChatLive = a.Live != nil && a.Live.Running
+	if wa.CanSend, wa.SendNote = canSend(a); wa.CanSend {
+		wa.SendURL = "/w/" + ws.Name + "/" + a.Name + "/send"
+	}
 	switch {
 	case a.Transcript == "":
 		wa.ChatNote = "No Claude Code session of " + a.Name + " found in this workspace's transcripts."
@@ -469,6 +483,78 @@ func (s *webServer) answer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// send types the principal's message into the agent's live session pane and
+// submits it, as if typed there. It never starts an agent, and never writes
+// to a peer or task pane.
+func (s *webServer) send(w http.ResponseWriter, r *http.Request) {
+	_, a, ok := s.findAgent(w, r)
+	if !ok {
+		return
+	}
+	text := strings.TrimSpace(r.FormValue("text"))
+	switch {
+	case text == "":
+		http.Error(w, "nothing to send", http.StatusBadRequest)
+		return
+	case len(text) > maxAnswer:
+		http.Error(w, fmt.Sprintf("message longer than %d characters", maxAnswer), http.StatusBadRequest)
+		return
+	}
+	if ok, why := canSend(a); !ok {
+		http.Error(w, why, http.StatusConflict)
+		return
+	}
+	prompt := s.src.Prompt
+	if prompt == nil {
+		prompt = herdrPrompt
+	}
+	if err := prompt(a.Live.PaneID, text); err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// canSend says whether the page may type into the agent's pane: only its
+// own session, running, and not waiting on a prompt in the pane. Otherwise
+// the reason, for the page.
+func canSend(a *Agent) (bool, string) {
+	switch {
+	case a.Live == nil || !a.Live.Running:
+		return false, a.Name + " is not running. Open it from the dashboard (TUI) or Herdr to talk to it."
+	case !sessionPane(a.Live):
+		return false, a.Name + " is open only as a peer or task pane; those answer their caller, not you."
+	case a.Live.Status == "blocked":
+		return false, a.Name + " is waiting on a prompt in its pane. Answer it there."
+	}
+	return true, ""
+}
+
+// sessionPane is false for the panes /agents:ask and /agents:delegate open
+// ("sigrid-peer", "Sigrid - Task"), which match the agent by label too.
+func sessionPane(p *LivePane) bool {
+	name, label := strings.ToLower(p.Name), strings.ToLower(strings.TrimSpace(p.Label))
+	for _, kind := range []string{"peer", "task"} {
+		if strings.HasSuffix(name, "-"+kind) || strings.HasSuffix(label, " - "+kind) {
+			return false
+		}
+	}
+	return true
+}
+
+// herdrPrompt submits text to a pane with `herdr agent prompt`. Herdr writes
+// text and Enter; it cannot always confirm the agent took it, so the page
+// shows the message once the transcript has it.
+func herdrPrompt(pane, text string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, herdrBin(), "agent", "prompt", pane, text).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("herdr agent prompt: %s", herdrError(out, err))
+	}
+	return nil
 }
 
 // agentFile resolves rel inside the agent's folder: a .md file, no way out

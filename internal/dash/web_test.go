@@ -145,7 +145,7 @@ func TestWebSingleWorkspace(t *testing.T) {
 	}
 }
 
-func TestWebOnlyWriteIsAnAnswer(t *testing.T) {
+func TestWebOnlyWritesAreAnswersAndMessages(t *testing.T) {
 	h := NewWebHandler(WebSource{FleetRoot: webFleet(t), Options: webOptions})
 	for _, method := range []string{"POST", "PUT", "DELETE"} {
 		rec := httptest.NewRecorder()
@@ -315,5 +315,75 @@ func TestInboxIsNotAnOpenSession(t *testing.T) {
 	write(t, filepath.Join(root, "agents/Sigrid/notes.md"), "x")
 	if ws, _ = Scan(root, Options{Now: now}); ws.Agents[0].Uncommitted != 1 {
 		t.Errorf("other files still count: %d", ws.Agents[0].Uncommitted)
+	}
+}
+
+// livePanes makes Sigrid in alpha live in one pane with the given name,
+// label and status.
+func livePanes(parent, name, label, status string) func(bool) Options {
+	return func(bool) Options {
+		return Options{Now: now, Herdr: func() ([]LivePane, error) {
+			return []LivePane{{Name: name, Label: label, PaneID: "w1:p7", CWD: filepath.Join(parent, "alpha"),
+				Agent: "claude", Status: status, Running: status != ""}}, nil
+		}}
+	}
+}
+
+func TestWebSendTypesIntoTheLivePane(t *testing.T) {
+	parent := webFleet(t)
+	var sent [][2]string
+	src := WebSource{FleetRoot: parent, Options: livePanes(parent, "sigrid", "Sigrid - Lead", "idle"),
+		Prompt: func(pane, text string) error { sent = append(sent, [2]string{pane, text}); return nil }}
+	h := NewWebHandler(src)
+
+	_, body := get(t, h, "/w/alpha/Sigrid")
+	if !strings.Contains(body, `action="/w/alpha/Sigrid/send"`) {
+		t.Fatalf("a live agent's page lacks the send box:\n%s", body)
+	}
+	code, msg := post(t, h, "/w/alpha/Sigrid/send", url.Values{"text": {"  Ship it.\nThen wrap.  "}}, "X-GoAgentic", "1")
+	if code != http.StatusNoContent {
+		t.Fatalf("send = %d %s", code, msg)
+	}
+	if len(sent) != 1 || sent[0] != [2]string{"w1:p7", "Ship it.\nThen wrap."} {
+		t.Errorf("prompted = %q", sent)
+	}
+	if _, err := os.Stat(filepath.Join(parent, "alpha/agents/Sigrid/memory/scheduled/inbox.md")); err == nil {
+		t.Error("a message goes to the pane, not the inbox")
+	}
+
+	for name, c := range map[string]struct {
+		src    WebSource
+		form   url.Values
+		header []string
+		want   int
+	}{
+		"no header":   {src, url.Values{"text": {"x"}}, nil, http.StatusForbidden},
+		"cross-site":  {src, url.Values{"text": {"x"}}, []string{"X-GoAgentic", "1", "Origin", "https://evil.example"}, http.StatusForbidden},
+		"empty":       {src, url.Values{"text": {" \n "}}, []string{"X-GoAgentic", "1"}, http.StatusBadRequest},
+		"too long":    {src, url.Values{"text": {strings.Repeat("x", 4001)}}, []string{"X-GoAgentic", "1"}, http.StatusBadRequest},
+		"not running": {WebSource{FleetRoot: parent, Options: webOptions, Prompt: src.Prompt}, url.Values{"text": {"x"}}, []string{"X-GoAgentic", "1"}, http.StatusConflict},
+		"shell only":  {WebSource{FleetRoot: parent, Options: livePanes(parent, "sigrid", "", ""), Prompt: src.Prompt}, url.Values{"text": {"x"}}, []string{"X-GoAgentic", "1"}, http.StatusConflict},
+		"peer pane":   {WebSource{FleetRoot: parent, Options: livePanes(parent, "sigrid-peer", "Sigrid - Peer", "idle"), Prompt: src.Prompt}, url.Values{"text": {"x"}}, []string{"X-GoAgentic", "1"}, http.StatusConflict},
+		"task pane":   {WebSource{FleetRoot: parent, Options: livePanes(parent, "", "Sigrid - Task", "working"), Prompt: src.Prompt}, url.Values{"text": {"x"}}, []string{"X-GoAgentic", "1"}, http.StatusConflict},
+		"blocked":     {WebSource{FleetRoot: parent, Options: livePanes(parent, "sigrid", "Sigrid - Lead", "blocked"), Prompt: src.Prompt}, url.Values{"text": {"x"}}, []string{"X-GoAgentic", "1"}, http.StatusConflict},
+	} {
+		if code, msg := post(t, NewWebHandler(c.src), "/w/alpha/Sigrid/send", c.form, c.header...); code != c.want {
+			t.Errorf("%s = %d, want %d (%s)", name, code, c.want, msg)
+		}
+	}
+	if len(sent) != 1 {
+		t.Errorf("a refused send must type nothing: %q", sent)
+	}
+
+	// Not running: no box, and the page says so instead of starting it.
+	_, body = get(t, NewWebHandler(WebSource{FleetRoot: parent, Options: webOptions}), "/w/alpha/Sigrid")
+	if strings.Contains(body, "/send") || !strings.Contains(body, "Sigrid is not running.") {
+		t.Errorf("a stopped agent's page must say it is not running, with no send box:\n%s", body)
+	}
+	// A failed prompt is reported, not swallowed.
+	fail := src
+	fail.Prompt = func(string, string) error { return os.ErrDeadlineExceeded }
+	if code, _ := post(t, NewWebHandler(fail), "/w/alpha/Sigrid/send", url.Values{"text": {"x"}}, "X-GoAgentic", "1"); code != http.StatusBadGateway {
+		t.Errorf("failed prompt = %d, want 502", code)
 	}
 }
