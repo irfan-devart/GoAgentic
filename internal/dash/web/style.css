@@ -172,37 +172,37 @@ ul.items.queue .who { min-width: 90px; }
 
 /* The agent page: its name and session state on top, then what it is
    working on (left) beside the conversation (right). */
-/* The agent's header: its tile, name and title, the session as a pill,
-   then the facts as small label and value pairs. */
-.agent-head { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 4px 14px; margin: 0 0 14px; padding: 14px 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
-.avatar { --hue: 250; grid-row: 1; width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; font-size: 20px; font-weight: 700; color: hsl(var(--hue) 45% 30%); background: hsl(var(--hue) 60% 90%); }
-.who-block { min-width: 0; }
-.name-row { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; }
-.agent-head .agent-name { font-size: 21px; font-weight: 700; line-height: 1.2; color: var(--fg); letter-spacing: -.01em; }
-.agent-title { margin: 1px 0 0; color: var(--dim); font-size: 14px; }
-.status-pill { --tone: var(--dim); display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; line-height: 24px; padding: 0 10px; border-radius: 12px; color: var(--tone); background: color-mix(in srgb, var(--tone) 12%, transparent); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+/* The agent's header: one band. Who (tile, name, state, title and when)
+   on the left; what it runs on and how full its context is on the right. */
+.agent-head { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; margin: 0 0 14px; padding: 12px 16px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+.avatar { --hue: 250; flex: none; width: 42px; height: 42px; border-radius: 11px; display: grid; place-items: center; font-size: 19px; font-weight: 700; color: hsl(var(--hue) 45% 30%); background: hsl(var(--hue) 60% 90%); }
+.who-block { flex: 1; min-width: 220px; }
+.name-row { display: flex; align-items: center; flex-wrap: wrap; gap: 2px 10px; }
+.agent-head .agent-name { font-size: 20px; font-weight: 700; line-height: 1.2; color: var(--fg); letter-spacing: -.01em; }
+.agent-title { margin: 2px 0 0; color: var(--dim); font-size: 13px; }
+.agent-title .sep { display: inline-block; width: 3px; height: 3px; border-radius: 50%; background: currentColor; vertical-align: middle; margin: 0 8px; opacity: .6; }
+.status-pill { --tone: var(--dim); display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; line-height: 22px; padding: 0 9px; border-radius: 11px; color: var(--tone); background: color-mix(in srgb, var(--tone) 12%, transparent); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .status-pill.ok { --tone: var(--ok); } .status-pill.foryou { --tone: var(--foryou); } .status-pill.blocked { --tone: var(--blocked); } .status-pill.accent { --tone: var(--accent); }
-.status-pill .sdot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.status-pill .sdot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .status-pill .spin { width: auto; color: inherit; }
 .status-pill .activity { color: inherit; }
 .status-pill .dim { color: inherit; opacity: .75; font-weight: 500; }
-.agent-head form.close { grid-row: 1; grid-column: 3; margin: 0; display: flex; gap: 10px; align-items: center; }
+.head-side { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.chip { --tone: var(--dim); display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line); font-size: 13px; white-space: nowrap; color: var(--fg); }
+.chip .mark { width: 14px; height: 14px; flex: none; }
+.chip.ctx { color: var(--dim); font-variant-numeric: tabular-nums; }
+.chip.ctx.ok { --tone: var(--ok); } .chip.ctx.waiting { --tone: var(--waiting); } .chip.ctx.blocked { --tone: var(--blocked); }
+.chip .bar { width: 44px; height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.chip .bar > span { display: block; height: 100%; border-radius: 3px; background: var(--tone); }
+.agent-head form.close { margin: 0; display: flex; gap: 10px; align-items: center; }
+.agent-head form.close button { height: 28px; padding: 0 12px; }
 .agent-head form.close .status { font-size: 13px; }
-.head-facts { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 4px 22px; margin: 6px 0 0; padding-top: 10px; border-top: 1px solid var(--line); }
-.head-facts div { display: flex; flex-direction: column; min-width: 0; }
-.head-facts dt { font-size: 11.5px; color: var(--dim); }
-.head-facts dd { margin: 0; font-size: 13px; font-variant-numeric: tabular-nums; display: flex; align-items: center; gap: 5px; }
-.head-facts .mark { width: 13px; height: 13px; flex: none; }
-.meter { --tone: var(--ok); display: block; height: 3px; margin-top: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
-.meter.waiting { --tone: var(--waiting); } .meter.blocked { --tone: var(--blocked); }
-.meter > span { display: block; height: 100%; background: var(--tone); border-radius: 2px; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .avatar { color: hsl(var(--hue) 70% 85%); background: hsl(var(--hue) 35% 26%); } }
 :root[data-theme="dark"] .avatar { color: hsl(var(--hue) 70% 85%); background: hsl(var(--hue) 35% 26%); }
 @media (max-width: 640px) {
-  .agent-head { grid-template-columns: auto 1fr; padding: 12px 14px; }
-  .agent-head form.close { grid-row: auto; grid-column: 1 / -1; order: 3; }
-  .head-facts { order: 2; }
-  .head-facts { grid-column: 1 / -1; }
+  .agent-head { padding: 12px 14px; align-items: flex-start; }
+  .head-side { margin-left: 0; width: 100%; }
+  .agent-head form.close { margin-left: auto; }
 }
 /* The agent's tracker: the same cards, stacked; parked items, the last
    session and health in a quiet footer under them. */

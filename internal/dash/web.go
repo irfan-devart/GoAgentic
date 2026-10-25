@@ -6,6 +6,7 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"html/template"
 	"io"
 	"net"
@@ -13,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -28,9 +30,19 @@ import (
 //go:embed web/page.tmpl web/style.css
 var webFiles embed.FS
 
+// styleVersion is the stylesheet's hash, in its link, so a browser never
+// keeps an old one.
+var styleVersion = func() string {
+	data, _ := webFiles.ReadFile("web/style.css")
+	h := fnv.New32a()
+	_, _ = h.Write(data)
+	return strconv.FormatUint(uint64(h.Sum32()), 36)
+}()
+
 var webTemplate = template.Must(template.New("page.tmpl").Funcs(template.FuncMap{
-	"trimHash": func(id string) string { return strings.TrimPrefix(id, "#") },
-	"trimPlan": func(next string) string { return strings.TrimPrefix(next, "» ") },
+	"trimHash":     func(id string) string { return strings.TrimPrefix(id, "#") },
+	"trimPlan":     func(next string) string { return strings.TrimPrefix(next, "» ") },
+	"styleVersion": func() string { return styleVersion },
 }).ParseFS(webFiles, "web/page.tmpl"))
 
 // WebSource tells the server what to show. With FleetRoot set it serves
@@ -149,6 +161,8 @@ func NewWebHandler(src WebSource) http.Handler {
 	mux.HandleFunc("GET /uploads/{name}", s.upload)
 	mux.HandleFunc("GET /style.css", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/css; charset=utf-8")
+		// The page names the sheet by its hash, so a new build is fetched.
+		w.Header().Set("Cache-Control", "no-cache")
 		data, _ := webFiles.ReadFile("web/style.css")
 		_, _ = w.Write(data)
 	})
@@ -229,7 +243,7 @@ type agentRow struct {
 
 type webAgent struct {
 	Name, Title string
-	Facts       []webFact
+	Head        webHead
 	// Usage is the running session's model and context use.
 	Usage *sessionUsage
 	// Initial and Hue make the header's tile.
@@ -460,7 +474,7 @@ func (s *webServer) agent(w http.ResponseWriter, r *http.Request) {
 		return out
 	}
 	wa := &webAgent{
-		Name: a.Name, Title: a.Title, Facts: webFacts(ws, a),
+		Name: a.Name, Title: a.Title,
 		Initial: strings.ToUpper(a.Name[:1]), Hue: avatarHue(a.Name),
 		Plan: sec.Plan, Mine: items(sec.Mine), Answered: items(sec.Answered), Inbox: sec.Inbox,
 		Others: items(sec.Others), Blocked: items(sec.Blocked), Open: items(sec.Open),
@@ -480,7 +494,7 @@ func (s *webServer) agent(w http.ResponseWriter, r *http.Request) {
 	}
 	s.applyLaunch(ws, a, wa)
 	s.applyClose(ws, a, wa)
-	wa.Facts = withUsage(wa.Facts, wa.Usage)
+	wa.Head = makeHead(ws, a, wa.Usage)
 	if last, ok := a.LastSession(); ok {
 		wa.LastSession = &last
 		wa.SessionHref = fileLink(ws, a, filepath.Join("memory", "sessions", last.File), all)

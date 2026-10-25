@@ -966,7 +966,7 @@ func TestHeaderShowsTheHarnessMaker(t *testing.T) {
 	if !strings.Contains(body, `title="claude by Anthropic`) || !strings.Contains(body, `<svg class="mark"`) {
 		t.Error("the header lacks the harness maker's mark")
 	}
-	if strings.Contains(body, "<dt>Pane</dt>") {
+	if strings.Contains(body, "w1:p7") {
 		t.Error("the header still shows the pane")
 	}
 }
@@ -989,13 +989,9 @@ func TestReadUsage(t *testing.T) {
 	if u := readUsage(codex); u == nil || u.Model != "gpt-6.1-sol" || u.Effort != "medium" || u.Used != 74762 || u.Window != 475000 {
 		t.Errorf("codex usage = %+v", u)
 	}
-	facts := withUsage([]webFact{{Label: "Harness"}, {Label: "Started"}}, readUsage(codex))
-	var got []string
-	for _, f := range facts {
-		got = append(got, f.Label+"="+f.Value)
-	}
-	if strings.Join(got, "|") != "Harness=|Model=gpt-6.1-sol · medium|Context=75k of 475k · 15%|Started=" {
-		t.Errorf("facts = %q", got)
+	head := makeHead(&Workspace{Scanned: now}, &Agent{Name: "Valdir"}, readUsage(codex))
+	if head.Model != "gpt-6.1-sol medium" || head.Ctx == nil || head.Ctx.Text != "15% context" || head.Ctx.Hint != "75k of 475k tokens in context at the last reply" {
+		t.Errorf("head = %+v %+v", head, head.Ctx)
 	}
 }
 

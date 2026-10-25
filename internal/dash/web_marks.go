@@ -19,5 +19,5 @@ var harnessMakers = map[string]harnessMaker{
 }
 
 func markSVG(path string) template.HTML {
-	return template.HTML(`<svg class="mark" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="` + path + `"/></svg>`)
+	return template.HTML(`<svg class="mark" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="` + path + `"/></svg>`)
 }
