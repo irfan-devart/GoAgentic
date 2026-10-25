@@ -294,3 +294,9 @@ ul.items.queue .who { min-width: 90px; }
   .info { overflow: visible; }
 }
 .card ul.items > li > .tag { padding-left: 62px; }
+/* The header's context chip, inverted: filled with its health colour. */
+.chip.ctx, .chip.ctx.ok, .chip.ctx.waiting, .chip.ctx.blocked { background: var(--tone); border-color: var(--tone); color: #fff; font-weight: 600; }
+.chip.ctx.blocked { border-color: var(--tone); }
+.chip.ctx .bar { background: rgba(255, 255, 255, .35); }
+.chip.ctx .bar > span { background: #fff; }
+.chip.ctx .bar > i { background: #fff; opacity: .9; }
