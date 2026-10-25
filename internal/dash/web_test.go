@@ -846,7 +846,9 @@ func TestParseActivity(t *testing.T) {
 		"✶ Percolating… (1m 3s · ↑ 2.1k tokens · esc to interrupt)\n":              "Percolating…|1m 3s · ↑ 2.1k tokens",
 		"✳ Clauding…\n": "Clauding…|",
 		"• Working (12s • esc to interrupt)\n› \n": "Working|12s",
-		"• Done, pushed.\n✻ Brewed for 2m 3s\n":    "",
+		// Codex 0.164, captured from a live pane.
+		"• Reviewing approval request (10s • esc to interrupt)\n  └ /bin/bash -lc 'sleep 40'\n› Ask Codex to do anything\n": "Reviewing approval request|10s",
+		"• Done, pushed.\n✻ Brewed for 2m 3s\n": "",
 		"plain output\n": "",
 	} {
 		got := ""
