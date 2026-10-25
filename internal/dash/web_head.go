@@ -1,7 +1,6 @@
 package dash
 
 import (
-	"fmt"
 	"hash/fnv"
 	"html/template"
 	"strings"
@@ -22,10 +21,13 @@ type webHead struct {
 	Ctx      *webCtx
 }
 
-// webCtx is how full the context window is; Tone colours its bar.
+// webCtx is how full the context window is, judged against the
+// workspace's budget (session health); Tone colours its bar.
 type webCtx struct {
-	Pct              int
-	Tone, Text, Hint string
+	Pct, Budget             int
+	Tone, Text, Hint, State string
+	// Soon: near the budget; Over: past it, so the session should wrap.
+	Soon, Over bool
 }
 
 func makeHead(ws *Workspace, a *Agent, u *sessionUsage) webHead {
@@ -69,18 +71,7 @@ func makeHead(ws *Workspace, a *Agent, u *sessionUsage) webHead {
 	if !a.LastReviewed.IsZero() {
 		head.Reviewed = shortDay(ws.Scanned, a.LastReviewed)
 	}
-	if u != nil && u.Used > 0 && u.Window > 0 {
-		pct := min(u.Used*100/u.Window, 100)
-		c := &webCtx{Pct: pct, Tone: "ok", Text: fmt.Sprintf("%d%% context", pct),
-			Hint: fmt.Sprintf("%s of %s tokens in context at the last reply", tokens(u.Used), tokens(u.Window))}
-		switch {
-		case pct >= 80:
-			c.Tone = "blocked"
-		case pct >= 50:
-			c.Tone = "waiting"
-		}
-		head.Ctx = c
-	}
+	head.Ctx = contextHealth(u, ws.ContextBudget)
 	return head
 }
 

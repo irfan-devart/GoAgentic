@@ -193,7 +193,16 @@ ul.items.queue .who { min-width: 90px; }
 .chip.ctx { color: var(--dim); font-variant-numeric: tabular-nums; }
 .chip.ctx.ok { --tone: var(--ok); } .chip.ctx.waiting { --tone: var(--waiting); } .chip.ctx.blocked { --tone: var(--blocked); }
 .chip .bar { width: 44px; height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; }
-.chip .bar > span { display: block; height: 100%; border-radius: 3px; background: var(--tone); }
+.chip .bar > span, .actx .bar > span { display: block; height: 100%; border-radius: 3px; background: var(--tone); }
+/* Session health: the bar marks the budget; past it the chip turns red. */
+.chip .bar, .actx .bar { position: relative; }
+.chip .bar > i, .actx .bar > i { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--fg); opacity: .45; }
+.chip.ctx.waiting, .actx.waiting { color: var(--waiting); }
+.chip.ctx.blocked, .actx.blocked { color: var(--blocked); border-color: color-mix(in srgb, var(--blocked) 40%, var(--line)); font-weight: 600; }
+.actx { --tone: var(--ok); display: flex; align-items: center; gap: 7px; margin: 8px 0 0; font-size: 12px; color: var(--dim); font-variant-numeric: tabular-nums; }
+.actx.waiting { --tone: var(--waiting); } .actx.blocked { --tone: var(--blocked); }
+.actx .bar { width: 56px; height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.agent-head form.close button.nudge { background: var(--blocked); border-color: var(--blocked); color: #fff; }
 .agent-head form.close { margin: 0; display: flex; gap: 10px; align-items: center; }
 .agent-head form.close button { height: 28px; padding: 0 12px; }
 .agent-head form.close .status { font-size: 13px; }

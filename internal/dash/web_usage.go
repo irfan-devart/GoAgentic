@@ -164,3 +164,41 @@ func tokens(n int) string {
 	}
 	return fmt.Sprint(n)
 }
+
+// defaultContextBudget is the share of the context window a session
+// should stay under before it wraps: short, wrapped sessions keep agents
+// sharp and their memory curated.
+const defaultContextBudget = 40
+
+// contextBudget reads context-budget: "40" or "40%", else the default.
+func contextBudget(v string) int {
+	var n int
+	if _, err := fmt.Sscanf(strings.TrimSuffix(strings.TrimSpace(v), "%"), "%d", &n); err == nil && n > 0 && n <= 100 {
+		return n
+	}
+	return defaultContextBudget
+}
+
+// contextHealth judges a session's context use against the budget:
+// healthy, wrap soon (within a quarter of the budget), or past it.
+func contextHealth(u *sessionUsage, budget int) *webCtx {
+	if u == nil || u.Used == 0 || u.Window == 0 {
+		return nil
+	}
+	if budget <= 0 {
+		budget = defaultContextBudget
+	}
+	pct := min(u.Used*100/u.Window, 100)
+	c := &webCtx{Pct: pct, Budget: budget, Tone: "ok", Text: fmt.Sprintf("%d%% context", pct), State: "healthy"}
+	switch {
+	case pct >= budget:
+		c.Tone, c.State, c.Over = "blocked", "past budget", true
+		c.Text = fmt.Sprintf("%d%% context, wrap", pct)
+	case pct >= budget*3/4:
+		c.Tone, c.State, c.Soon = "waiting", "wrap soon", true
+		c.Text = fmt.Sprintf("%d%% context, wrap soon", pct)
+	}
+	c.Hint = fmt.Sprintf("%s of %s tokens in context at the last reply. Session health: %s (budget %d%%; wrap by then so the session stays sharp and its memory is saved)",
+		tokens(u.Used), tokens(u.Window), c.State, budget)
+	return c
+}

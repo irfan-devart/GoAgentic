@@ -990,7 +990,7 @@ func TestReadUsage(t *testing.T) {
 		t.Errorf("codex usage = %+v", u)
 	}
 	head := makeHead(&Workspace{Scanned: now}, &Agent{Name: "Valdir"}, readUsage(codex))
-	if head.Model != "gpt-6.1-sol medium" || head.Ctx == nil || head.Ctx.Text != "15% context" || head.Ctx.Hint != "75k of 475k tokens in context at the last reply" {
+	if head.Model != "gpt-6.1-sol medium" || head.Ctx == nil || head.Ctx.Text != "15% context" || !strings.HasPrefix(head.Ctx.Hint, "75k of 475k tokens in context at the last reply. Session health: healthy") {
 		t.Errorf("head = %+v %+v", head, head.Ctx)
 	}
 }
@@ -1007,6 +1007,24 @@ func TestModelNames(t *testing.T) {
 	for id, want := range map[string]int{"claude-opus-5-5": 1_000_000, "claude-haiku-5-5": 1_000_000, "claude-sonnet-4-6": 200_000, "claude-opus-4-8[1m]": 1_000_000, "gpt-6.1-sol": 0} {
 		if got := claudeWindow(id); got != want {
 			t.Errorf("claudeWindow(%s) = %d, want %d", id, got, want)
+		}
+	}
+}
+
+func TestContextHealth(t *testing.T) {
+	use := func(pct int) *sessionUsage { return &sessionUsage{Used: pct * 10_000, Window: 1_000_000} }
+	for pct, want := range map[int]string{10: "healthy 10% context", 29: "healthy 29% context", 30: "wrap soon 30% context, wrap soon", 39: "wrap soon 39% context, wrap soon", 40: "past budget 40% context, wrap", 72: "past budget 72% context, wrap"} {
+		c := contextHealth(use(pct), 40)
+		if got := c.State + " " + c.Text; got != want || c.Over != (pct >= 40) || c.Soon != (pct >= 30 && pct < 40) {
+			t.Errorf("%d%%: %q (over %v, soon %v), want %q", pct, got, c.Over, c.Soon, want)
+		}
+	}
+	if c := contextHealth(use(55), 60); c.State != "wrap soon" {
+		t.Errorf("a 60%% budget at 55%% = %q, want wrap soon", c.State)
+	}
+	for v, want := range map[string]int{"": 40, "50": 50, "35%": 35, "x": 40, "0": 40, "150": 40} {
+		if got := contextBudget(v); got != want {
+			t.Errorf("contextBudget(%q) = %d, want %d", v, got, want)
 		}
 	}
 }

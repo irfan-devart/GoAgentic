@@ -21,8 +21,11 @@ type Workspace struct {
 	// Harness is the workspace's default CLI (conventions frontmatter).
 	Harness string
 	// Model is the workspace's default model, passed to the CLI as --model.
-	Model  string
-	Agents []*Agent
+	Model string
+	// ContextBudget is how full, in percent, a session's context may get
+	// before it should wrap (conventions frontmatter context-budget:).
+	ContextBudget int
+	Agents        []*Agent
 	// Live is false when Herdr could not be queried, so the Live column is
 	// unknown rather than empty.
 	Live    bool
@@ -87,6 +90,7 @@ func Scan(root string, opts Options) (*Workspace, error) {
 		Model:     conv["model"],
 		Scanned:   opts.Now,
 	}
+	ws.ContextBudget = contextBudget(conv["context-budget"])
 
 	// Single-domain agents/<name>/ and multi-domain agents/<scope>/<name>/.
 	var dirs []string

@@ -222,6 +222,7 @@ main.addEventListener("keydown", e => {
     <li class="{{if $c.Waiting}}waiting{{else}}dim{{end}}">◆ {{$c.Waiting}} P1 waiting on others</li>
     <li class="{{if $c.Blocked}}blocked{{else}}dim{{end}}">■ {{$c.Blocked}} blocked</li>
     <li class="{{if not $c.Health}}dim{{end}}">⚠ {{$c.Health}} health</li>
+    {{with $.Workspace}}{{if .Over}}<li class="blocked" title="Running sessions past the context budget: wrap them">◕ {{.Over}} past context budget</li>{{end}}{{if .Soon}}<li class="waiting" title="Running sessions nearing the context budget">◑ {{.Soon}} near context budget</li>{{end}}{{end}}
   </ul>
 </header>
 {{end}}
@@ -253,6 +254,7 @@ main.addEventListener("keydown", e => {
 {{range .Rows}}<a class="acard" href="{{.Href}}">
   <div class="ahead"><span class="dot {{.Tone}}"></span><span class="nm"><b>{{.Agent}}</b>{{with .Title}}<small>{{.}}</small>{{end}}</span>{{if .OnYou}}<span class="badge" title="{{.OnYou}} waiting on you">{{.OnYou}}</span>{{end}}</div>
   <div class="facts">{{with .Now}}{{template "state" .}}{{else}}<span class="{{.LiveClass}}">{{.Live}}</span>{{end}} · <span class="dim">{{.Harness}}</span>{{if ne .Started "—"}} · <span class="dim">started {{.Started}} ago</span>{{end}} · <span class="health-{{.Level}}" title="Health">{{.Health}}</span></div>
+  {{with .Ctx}}<p class="actx {{.Tone}}" title="{{.Hint}}"><span class="bar"><span style="width: {{.Pct}}%"></span><i style="left: {{.Budget}}%"></i></span>{{.Text}}</p>{{end}}
   {{with .Now}}{{with .Last}}<p class="last">“{{.}}”</p>{{end}}{{end}}
   {{if .Next}}<p class="next"><span class="dim">Next</span> {{trimPlan .Next}}{{if .NextBlocked}} <span class="blocked">■ blocked</span>{{else if .NextWaiting}} <span class="{{if .NextP1}}waiting{{else}}dim{{end}}">◆ waiting</span>{{end}}</p>{{end}}
 </a>{{end}}
@@ -294,9 +296,9 @@ main.addEventListener("keydown", e => {
   </div>
   <div class="head-side">
     {{with .Head}}<span class="chip" title="{{.ModelHint}}">{{.Mark}}{{.Model}}</span>
-    {{with .Ctx}}<span class="chip ctx {{.Tone}}" title="{{.Hint}}"><span class="bar"><span style="width: {{.Pct}}%"></span></span>{{.Text}}</span>{{end}}{{end}}
+    {{with .Ctx}}<span class="chip ctx {{.Tone}}" title="{{.Hint}}"><span class="bar"><span style="width: {{.Pct}}%"></span><i style="left: {{.Budget}}%"></i></span>{{.Text}}</span>{{end}}{{end}}
     {{if and .CloseURL (not .WrapStopped) (not .Wrapping)}}<form class="answer close" method="post" action="{{.CloseURL}}">
-      <span class="status{{if .CloseError}} error{{end}}">{{.CloseError}}</span> <button type="submit" class="quiet"{{if .Busy}} disabled title="{{.Name}} is busy — wrap when it has finished"{{else}} title="Runs its wrap, then closes the pane"{{end}}>Wrap &amp; close</button>
+      <span class="status{{if .CloseError}} error{{end}}">{{.CloseError}}</span> <button type="submit" class="{{if and .Head.Ctx .Head.Ctx.Over}}nudge{{else}}quiet{{end}}"{{if .Busy}} disabled title="{{.Name}} is busy — wrap when it has finished"{{else}} title="Runs its wrap, then closes the pane"{{end}}>Wrap &amp; close</button>
     </form>{{end}}
   </div>
 </header>

@@ -228,6 +228,16 @@ type page struct {
 
 type webWorkspace struct {
 	Rows []agentRow
+	// Over and Soon count running sessions past or near the context
+	// budget.
+	Over, Soon int
+}
+
+func btoi(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 type agentRow struct {
@@ -237,8 +247,10 @@ type agentRow struct {
 	// OnYou counts what waits on the principal: items and unread runs.
 	OnYou int
 	Title string
-	// Now is the agent's running session, when it has one.
+	// Now is the agent's running session, when it has one; Ctx its
+	// session health.
 	Now *nowLine
+	Ctx *webCtx
 }
 
 type webAgent struct {
@@ -438,6 +450,12 @@ func (s *webServer) workspace(w http.ResponseWriter, r *http.Request) {
 		}
 		if l, ok := now[a.Name]; ok {
 			ar.Now = &l
+			if path, ok, _ := s.chatPath(ws, a); ok && path != "" {
+				if ar.Ctx = contextHealth(readUsage(path), ws.ContextBudget); ar.Ctx != nil {
+					p.Workspace.Over += btoi(ar.Ctx.Over)
+					p.Workspace.Soon += btoi(ar.Ctx.Soon)
+				}
+			}
 		}
 		p.Workspace.Rows = append(p.Workspace.Rows, ar)
 	}
