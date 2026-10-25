@@ -154,6 +154,12 @@ ul.tasks > li.off .task { color: var(--dim); font-weight: 400; }
 .card-focus .agreed.pending { color: var(--foryou); }
 .focus-list { margin: 4px 0 10px; padding-left: 22px; }
 .focus-list li { padding: 3px 0; font-weight: 500; }
+.focus-item > summary { cursor: pointer; list-style: none; }
+.focus-item > summary::-webkit-details-marker { display: none; }
+.focus-item > summary::after { content: " ▸"; color: var(--dim); font-weight: 400; }
+.focus-item[open] > summary::after { content: " ▾"; }
+.focus-item .more { font-weight: 400; margin: 4px 0 8px; padding-left: 10px; border-left: 2px solid color-mix(in srgb, var(--title) 30%, var(--line)); }
+.focus-item .more p { margin: 4px 0; }
 .focus-list li::marker { color: var(--title); font-weight: 700; font-variant-numeric: tabular-nums; }
 .card .plan-steps li { padding: 2px 0; }
 .card .plan-steps li::marker { color: var(--dim); font-variant-numeric: tabular-nums; }

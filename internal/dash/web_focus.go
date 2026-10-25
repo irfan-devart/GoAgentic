@@ -13,7 +13,7 @@ import (
 // priorities heading over a numbered list.
 
 type sessionFocus struct {
-	Items []string
+	Items []focusItem
 	// At is when it was declared; Agreed: the principal has replied since.
 	At     time.Time
 	Agreed bool
@@ -25,6 +25,16 @@ var (
 	boldLeadRe  = regexp.MustCompile(`^\*\*(.+?)\*\*`)
 	idOnlyRe    = regexp.MustCompile(`^\s*#?\w{1,6}[:.]?\s*$`)
 )
+
+// focusItem is one priority: its lead, the rest of what the agent said
+// about it, and the tracker item it names, if any (filled by the page).
+type focusItem struct {
+	Lead, Text string
+	Ref        *webItem
+}
+
+// itemRefRe finds the tracker item a priority names ("#63", "#18d").
+var itemRefRe = regexp.MustCompile(`#(\d+[a-z]?)\b`)
 
 // maxFocus bounds the items shown; the convention asks for three.
 const maxFocus = 5
@@ -49,13 +59,13 @@ func findFocus(chat []ChatEntry) *sessionFocus {
 }
 
 // focusItems reads the numbered list under a focus heading in a message.
-func focusItems(text string) []string {
+func focusItems(text string) []focusItem {
 	lines := strings.Split(text, "\n")
 	for i, line := range lines {
 		if !focusHeadRe.MatchString(strings.TrimSpace(line)) {
 			continue
 		}
-		var items []string
+		var items []focusItem
 		for _, l := range lines[i+1:] {
 			if strings.TrimSpace(l) == "" && len(items) == 0 {
 				continue
@@ -66,11 +76,13 @@ func focusItems(text string) []string {
 					break
 				}
 				if len(items) > 0 && strings.HasPrefix(l, " ") {
-					continue // the item's own second line
+					last := &items[len(items)-1] // the item's own second line
+					last.Text = strings.TrimSpace(last.Text + " " + plainText(l))
+					continue
 				}
 				break
 			}
-			items = append(items, focusLead(m[1]))
+			items = append(items, focusItem{Lead: focusLead(m[1]), Text: focusRest(m[1])})
 		}
 		if len(items) > 0 {
 			return items[:min(len(items), maxFocus)]
@@ -91,4 +103,38 @@ func focusLead(s string) string {
 	}
 	s = strings.NewReplacer("**", "", "`", "").Replace(s)
 	return cut(strings.TrimRight(strings.TrimSpace(s), ".:"), 110)
+}
+
+// focusRest is what an item says after its lead.
+func focusRest(s string) string {
+	if m := boldLeadRe.FindStringSubmatch(s); m != nil && !idOnlyRe.MatchString(m[1]) {
+		s = s[len(m[0]):]
+	} else if i := strings.Index(s, ". "); i > 0 {
+		s = s[i+2:]
+	} else {
+		s = ""
+	}
+	return strings.TrimLeft(plainText(s), ":;,.—– ")
+}
+
+func plainText(s string) string {
+	return strings.TrimSpace(strings.NewReplacer("**", "", "`", "").Replace(s))
+}
+
+// linkFocus points each priority that names a tracker item at it.
+func linkFocus(f *sessionFocus, lists ...[]webItem) {
+	if f == nil {
+		return
+	}
+	byID := map[string]*webItem{}
+	for _, list := range lists {
+		for i := range list {
+			byID[strings.TrimPrefix(list[i].ID, "#")] = &list[i]
+		}
+	}
+	for i := range f.Items {
+		if m := itemRefRe.FindStringSubmatch(f.Items[i].Lead); m != nil {
+			f.Items[i].Ref = byID[m[1]]
+		}
+	}
 }

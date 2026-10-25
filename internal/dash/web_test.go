@@ -1045,8 +1045,23 @@ func TestFindFocus(t *testing.T) {
 		{Kind: "agent", At: at, Text: declared},
 	}
 	f := findFocus(chat)
-	if f == nil || strings.Join(f.Items, "|") != "#63 Web dashboard, step 3b: the send box|My own first tracker sweep|Whatever time is left: the fleet" || f.Agreed {
+	leads := func(f *sessionFocus) string {
+		var out []string
+		for _, it := range f.Items {
+			out = append(out, it.Lead)
+		}
+		return strings.Join(out, "|")
+	}
+	if f == nil || leads(f) != "#63 Web dashboard, step 3b: the send box|My own first tracker sweep|Whatever time is left: the fleet" || f.Agreed {
 		t.Fatalf("focus = %+v", f)
+	}
+	// Each keeps the rest of what was said, its second line too.
+	if f.Items[0].Text != "This posts a message. It is on a branch." || f.Items[1].Text != "It's small." || f.Items[2].Text != "More here." {
+		t.Errorf("texts = %q | %q | %q", f.Items[0].Text, f.Items[1].Text, f.Items[2].Text)
+	}
+	linkFocus(f, []webItem{{Item: Item{ID: "63"}, Detail: "the POC"}})
+	if f.Items[0].Ref == nil || f.Items[0].Ref.Detail != "the POC" || f.Items[1].Ref != nil {
+		t.Errorf("refs = %+v", f.Items)
 	}
 	chat = append(chat, ChatEntry{Kind: "you", Text: "yes"}, ChatEntry{Kind: "agent", Text: "1. done one thing\n2. and another"})
 	if f := findFocus(chat); f == nil || !f.Agreed || len(f.Items) != 3 {
@@ -1057,7 +1072,7 @@ func TestFindFocus(t *testing.T) {
 	}
 	// A focus re-declared later replaces the first.
 	chat = append(chat, ChatEntry{Kind: "agent", Text: "**Proposed focus**\n1. **#79 shared Holocron.** Read the reply."})
-	if f := findFocus(chat); f == nil || f.Items[0] != "#79 shared Holocron" || f.Agreed {
+	if f := findFocus(chat); f == nil || f.Items[0].Lead != "#79 shared Holocron" || f.Agreed {
 		t.Errorf("re-declared focus = %+v", f)
 	}
 }

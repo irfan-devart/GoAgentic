@@ -724,6 +724,7 @@ func (s *webServer) readChat(ws *Workspace, a *Agent, wa *webAgent) {
 		wa.ChatNote = "Could not read the session: " + err.Error()
 	}
 	wa.Focus = findFocus(entries)
+	linkFocus(wa.Focus, wa.Mine, wa.Answered, wa.Others, wa.Blocked, wa.Open, wa.Parked)
 	if len(entries) > maxChat {
 		entries = entries[len(entries)-maxChat:]
 	}
