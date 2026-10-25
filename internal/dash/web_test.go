@@ -1110,3 +1110,22 @@ func TestWrapClosesWithNoPageOpen(t *testing.T) {
 		t.Fatal("the pane was not closed after the wrap")
 	}
 }
+
+// Once the session has declared its priorities, the plan from the last
+// wrap is the same list said earlier, so its card goes.
+func TestFocusReplacesThePlanCard(t *testing.T) {
+	parent := webFleet(t)
+	tr := t.TempDir()
+	dir := filepath.Join(tr, projectDirName(filepath.Join(parent, "alpha")))
+	write(t, filepath.Join(dir, "s1.jsonl"), `{"type":"user","message":{"role":"user","content":"<command-name>/agents:start</command-name>\n<command-args>sigrid</command-args>"},"timestamp":"2026-10-25T09:59:00Z"}`+"\n"+`{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Pane: Sigrid\n\nThe last wrap's plan still holds."}]},"timestamp":"2026-10-25T10:00:00Z"}`+"\n")
+	pane := claudePane("idle", "s1")
+	h := NewWebHandler(WebSource{FleetRoot: parent, Options: paneOpts(parent, tr, &pane)})
+	if _, body := get(t, h, "/w/alpha/Sigrid"); !strings.Contains(body, "Plan from its last wrap") || strings.Contains(body, "card-focus") {
+		t.Errorf("no focus declared: want the plan card only:\n%s", body)
+	}
+	pane = claudePane("idle", "s2")
+	write(t, filepath.Join(dir, "s2.jsonl"), `{"type":"user","message":{"role":"user","content":"<command-name>/agents:start</command-name>\n<command-args>sigrid</command-args>"},"timestamp":"2026-10-25T09:59:00Z"}`+"\n"+`{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"**Proposed focus:**\n1. **#3 ship it.** Today.\n2. **#4 tidy.**"}]},"timestamp":"2026-10-25T10:00:00Z"}`+"\n")
+	if _, body := get(t, h, "/w/alpha/Sigrid"); strings.Contains(body, "card-plan") || !strings.Contains(body, "card-focus") {
+		t.Errorf("focus declared: want the priorities card and no plan card:\n%s", body)
+	}
+}

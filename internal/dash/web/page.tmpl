@@ -320,8 +320,8 @@ main.addEventListener("keydown", e => {
 {{if or .Mine .Answered}}<ul class="items">{{range .Mine}}<li>{{template "item" .}}</li>{{end}}{{range .Answered}}<li>{{template "item" .}}</li>{{end}}</ul>{{else}}<p class="dim none">Nothing waiting on you.</p>{{end}}
 {{if .Inbox}}<p class="inbox-note">{{.Inbox}} scheduled run(s) not yet read: start {{.Name}} to drain its inbox</p>{{end}}</section>
 
-<section class="card card-plan{{if not .Plan}} quiet{{end}}"><h3 class="card-head"><span class="cdot"></span>{{if .ChatLive}}Plan from its last wrap{{else}}Next session{{end}}</h3>
-{{if and .ChatLive .Plan}}<p class="dim sub">Set at its last wrap; the session beside may have moved on.</p>{{end}}{{template "plan" .Plan}}</section>
+{{if not .Focus}}<section class="card card-plan{{if not .Plan}} quiet{{end}}"><h3 class="card-head"><span class="cdot"></span>{{if .ChatLive}}Plan from its last wrap{{else}}Next session{{end}}</h3>
+{{if and .ChatLive .Plan}}<p class="dim sub">Set at its last wrap; the session beside may have moved on.</p>{{end}}{{template "plan" .Plan}}</section>{{end}}
 
 {{if .Others}}<section class="card card-waiting"><h3 class="card-head"><span class="cdot"></span>Waiting on others<span class="pill">{{len .Others}}</span></h3>{{template "section" .Others}}</section>{{end}}
 {{if .Blocked}}<section class="card card-blocked"><h3 class="card-head"><span class="cdot"></span>Blocked<span class="pill">{{len .Blocked}}</span></h3>{{template "section" .Blocked}}</section>{{end}}
