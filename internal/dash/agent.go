@@ -89,7 +89,7 @@ type FileInfo struct {
 }
 
 // agentName is the agent's directory name, spelled as name.md's heading
-// spells it ("# Diotima — Name" for agents/diotima), so a lowercase
+// spells it ("# Dario — Name" for agents/dario), so a lowercase
 // directory still shows a capitalised name.
 func agentName(dir string) string {
 	base := filepath.Base(dir)
