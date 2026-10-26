@@ -20,7 +20,7 @@ type sessionFocus struct {
 }
 
 var (
-	focusHeadRe = regexp.MustCompile(`(?i)^\W*(proposed |session |today's |agreed )?(focus|priorities)\b`)
+	focusHeadRe = regexp.MustCompile(`(?i)^\W*((proposed|session|today's|agreed|this session's)\s+)*(focus|priorities)\b`)
 	focusItemRe = regexp.MustCompile(`^\s*\d+[.)]\s+(.+)$`)
 	boldLeadRe  = regexp.MustCompile(`^\*\*(.+?)\*\*`)
 	idOnlyRe    = regexp.MustCompile(`^\s*#?\w{1,6}[:.]?\s*$`)

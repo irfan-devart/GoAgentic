@@ -111,7 +111,7 @@ func TestParseActionsFlatTableUsesPriorityColumn(t *testing.T) {
 func TestBlockedDetection(t *testing.T) {
 	for status, want := range map[string]bool{
 		"Blocked on legal":                  true,
-		"Waiting on Vishen/Dario":           true,
+		"Waiting on Astrid/Dario":           true,
 		"Draft delivered — awaiting Norman": true,
 		"Gated by budget":                   true,
 		"Unblocked (MV side); part waits":   false,
@@ -339,7 +339,7 @@ func TestStandardStates(t *testing.T) {
 		{"Waiting on Norman", StateWaiting, "Norman", true, true, false, false, false},
 		{"Waiting on Norman's posting", StateWaiting, "Norman's posting", true, true, false, false, false},
 		{"Waiting on Dario — tech = 25 seats set", StateWaiting, "Dario", true, false, true, false, false},
-		{"Waiting on Vishen/Dario (Norman chasing)", StateWaiting, "Vishen/Dario", true, false, true, false, false},
+		{"Waiting on Astrid/Dario (Norman chasing)", StateWaiting, "Astrid/Dario", true, false, true, false, false},
 		{"Waiting on #51", StateWaiting, "#51", true, false, true, false, false},
 		{"Parked — revisit after TE go", StateParked, "", false, false, false, true, false},
 	}

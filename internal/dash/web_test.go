@@ -1067,13 +1067,18 @@ func TestFindFocus(t *testing.T) {
 	if f := findFocus(chat); f == nil || !f.Agreed || len(f.Items) != 3 {
 		t.Errorf("after the reply, focus = %+v (a list with no focus heading must not count)", f)
 	}
-	if got := focusLead("**#86** handover: wait for Mulail. Then more."); got != "#86 handover: wait for Mulail" {
+	if got := focusLead("**#86** handover: wait for Dario. Then more."); got != "#86 handover: wait for Dario" {
 		t.Errorf("an id-only lead = %q", got)
 	}
 	// A focus re-declared later replaces the first.
-	chat = append(chat, ChatEntry{Kind: "agent", Text: "**Proposed focus**\n1. **#79 shared Holocron.** Read the reply."})
-	if f := findFocus(chat); f == nil || f.Items[0].Lead != "#79 shared Holocron" || f.Agreed {
+	chat = append(chat, ChatEntry{Kind: "agent", Text: "**Proposed focus**\n1. **#79 shared notes.** Read the reply."})
+	if f := findFocus(chat); f == nil || f.Items[0].Lead != "#79 shared notes" || f.Agreed {
 		t.Errorf("re-declared focus = %+v", f)
+	}
+	// Two qualifiers before "focus" still make a heading.
+	chat = append(chat, ChatEntry{Kind: "agent", Text: "Two new things.\n\n**Proposed session focus:**\n1. **The quote.** Ask for a read."})
+	if f := findFocus(chat); f == nil || f.Items[0].Lead != "The quote" {
+		t.Errorf("proposed session focus = %+v", f)
 	}
 }
 
