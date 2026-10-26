@@ -1128,3 +1128,18 @@ func TestOrangeMeansP1WaitingOnOthers(t *testing.T) {
 		t.Errorf("a P1 waiting on someone else: tone = %v, want orange", got)
 	}
 }
+
+func TestAgentNameFromNameFile(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "dario")
+	if got := agentName(dir); got != "dario" {
+		t.Errorf("no name.md: %q", got)
+	}
+	write(t, filepath.Join(dir, "name.md"), "# Dario — Name\n\n## The Name\n")
+	if got := agentName(dir); got != "Dario" {
+		t.Errorf("name.md spelling: %q", got)
+	}
+	write(t, filepath.Join(dir, "name.md"), "# Astrid — Name\n")
+	if got := agentName(dir); got != "dario" {
+		t.Errorf("a heading naming someone else must not rename: %q", got)
+	}
+}

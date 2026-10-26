@@ -88,13 +88,31 @@ type FileInfo struct {
 	Size int64
 }
 
+// agentName is the agent's directory name, spelled as name.md's heading
+// spells it ("# Diotima — Name" for agents/diotima), so a lowercase
+// directory still shows a capitalised name.
+func agentName(dir string) string {
+	base := filepath.Base(dir)
+	data, err := os.ReadFile(filepath.Join(dir, "name.md"))
+	if err != nil {
+		return base
+	}
+	line, _, _ := strings.Cut(string(data), "\n")
+	if h, ok := strings.CutPrefix(strings.TrimSpace(line), "# "); ok {
+		if f := strings.Fields(h); len(f) > 0 && strings.EqualFold(f[0], base) {
+			return f[0]
+		}
+	}
+	return base
+}
+
 // coreFiles must exist in every agent directory.
 var coreFiles = []string{"soul.md", "role.md", "autonomy.md", "actions.md", "MEMORY.md"}
 
 func loadAgent(dir, principal string, now time.Time) *Agent {
 	ctx := readFrontmatter(filepath.Join(dir, "context.md"))
 	a := &Agent{
-		Name:    filepath.Base(dir),
+		Name:    agentName(dir),
 		Dir:     dir,
 		Title:   ctx["title"],
 		Scope:   ctx["scope"],
