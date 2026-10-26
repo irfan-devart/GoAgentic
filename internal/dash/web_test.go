@@ -881,10 +881,11 @@ func TestWebShowsTheHarnessStatusLine(t *testing.T) {
 			t.Errorf("%s lacks the status line", path)
 		}
 	}
-	// The header pill says the state, not the harness's word, with its time and tokens.
+	// The header pill says only the state: the status line under the chat
+	// already has the harness's word, time and tokens.
 	_, body := get(t, h, "/w/alpha/Sigrid")
-	pill := regexp.MustCompile(`<span class="status-pill.*?</span></span>`).FindString(body)
-	if !strings.Contains(pill, `<span class="dim">26s · ↓ 482 tokens</span>`) || strings.Contains(pill, "Percolating") {
+	pill := regexp.MustCompile(`<span class="status-pill.*?</span></div>`).FindString(body)
+	if pill == "" || strings.Contains(pill, "26s") || strings.Contains(pill, "Percolating") {
 		t.Errorf("header pill = %s", pill)
 	}
 	// A working agent's card on the workspace page is marked like a team card.

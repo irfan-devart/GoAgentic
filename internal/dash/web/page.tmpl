@@ -307,7 +307,7 @@ main.addEventListener("keydown", e => {
   <span class="avatar" style="--hue: {{.Hue}}" aria-hidden="true">{{.Initial}}</span>
   <div class="who-block">
     <div class="name-row"><h1 class="agent-name">{{.Name}}</h1>
-    <span class="status-pill {{.StateClass}}">{{if or (eq .State "working") (eq .State "starting") (eq .State "wrapping up")}}<span class="spin" aria-hidden="true">⠋</span>{{else}}<span class="sdot"></span>{{end}}{{.State}}{{with .Activity}}{{with .Meta}} <span class="dim">{{.}}</span>{{end}}{{end}}</span></div>
+    <span class="status-pill {{.StateClass}}">{{if or (eq .State "working") (eq .State "starting") (eq .State "wrapping up")}}<span class="spin" aria-hidden="true">⠋</span>{{else}}<span class="sdot"></span>{{end}}{{.State}}</span></div>
     {{with .Title}}<p class="agent-title">{{.}}</p>{{end}}
     <p class="agent-meta">{{with .Head}}<span class="runs" title="{{.ModelHint}}">{{.Mark}}{{.Model}}</span>{{with .When}}<span class="when">{{.}}</span>{{end}}{{end}}</p>
   </div>
