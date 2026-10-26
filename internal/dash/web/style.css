@@ -397,3 +397,23 @@ ol.feed-list li.decision { background: color-mix(in srgb, var(--title) 5%, trans
   .team-split .chat-col { order: 0; }
   .feed-scroll { max-height: 70vh; }
 }
+/* Working is loud: a green card with a thick edge, a solid pill, a pulsing
+   ring on the avatar and a band saying where. Not running is quiet. */
+.mcard { position: relative; overflow: hidden; }
+.mcard.busy { border: 1px solid color-mix(in srgb, var(--ok) 70%, var(--line)); background: color-mix(in srgb, var(--ok) 8%, var(--surface)); box-shadow: inset 5px 0 0 var(--ok), 0 0 0 3px color-mix(in srgb, var(--ok) 14%, transparent); padding-left: 18px; }
+.mcard.busy .status-pill { background: var(--ok); color: #fff; }
+.mcard.busy .status-pill .spin, .mcard.busy .status-pill .activity { color: #fff; }
+.mcard.busy .avatar { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--ok); animation: team-pulse 1.6s ease-in-out infinite; }
+@keyframes team-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--ok); }
+  50% { box-shadow: 0 0 0 2px var(--surface), 0 0 0 7px color-mix(in srgb, var(--ok) 35%, transparent); }
+}
+.working-band { display: flex; align-items: center; gap: 7px; margin: 0; font-size: 12.5px; font-weight: 600; color: var(--ok); }
+.working-band .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); flex: none; animation: team-blink 1.2s ease-in-out infinite; }
+@keyframes team-blink { 50% { opacity: .25; } }
+.mcard .where { margin: 0; font-size: 12.5px; }
+.mcard.off { background: color-mix(in srgb, var(--dim) 4%, var(--surface)); }
+.mcard.off .avatar { filter: grayscale(1); opacity: .55; }
+.mcard.off .mhead .nm b { color: var(--dim); }
+.mcard.off .status-pill { background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
+@media (prefers-reduced-motion: reduce) { .mcard.busy .avatar, .working-band .pulse { animation: none; } }

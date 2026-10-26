@@ -153,6 +153,7 @@ func TestWebTeam(t *testing.T) {
 		"Sigrid team", "watch only",
 		`<span class="wo">WO-1</span> move the invoices`, // Astrid's live card
 		"Question to lead", "Needs you", "⏱ overdue", // WO-2 is past its due time
+		`class="mcard off" href="/w/alpha/Bo"`, // every member has a card; Bo has no pane
 		"Billing moved to Acme", "invoices half moved",
 		"handed Astrid WO-1: move the invoices", // the feed
 		`<span class="fwho" style="--hue:`,

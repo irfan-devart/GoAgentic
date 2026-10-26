@@ -405,16 +405,16 @@ main.addEventListener("keydown", e => {
 {{with .NeedsYou}}<section class="card card-foryou"><h3 class="card-head"><span class="cdot"></span>Needs you<span class="pill">{{len .}}</span></h3>
 <ul class="orders">{{range .}}{{template "order" .}}{{end}}</ul>
 <p class="dim sub">Past its due time, at the round limit, or waiting on you. The lead brings these to you; answer it in the lead's chat.</p></section>{{end}}
-<div class="live-strip">{{range .Live}}<a class="mcard{{if .Lead}} lead{{end}}{{if eq .State "working"}} busy{{end}}" href="{{.Href}}">
+<div class="live-strip">{{range .Live}}<a class="mcard{{if .Lead}} lead{{end}}{{if .Working}} busy{{else if .Off}} off{{end}}" href="{{.Href}}">
   <div class="mhead"><span class="avatar sm" style="--hue: {{.Hue}}" aria-hidden="true">{{.Initial}}</span><span class="nm"><b>{{.Name}}</b><small>{{if .Lead}}Lead{{else}}{{.Title}}{{end}}</small></span>
-  <span class="status-pill {{.Class}}">{{if eq .State "working"}}<span class="spin" aria-hidden="true">⠋</span>{{else}}<span class="sdot"></span>{{end}}{{with .Activity}}<span class="activity">{{.Word}}</span>{{else}}{{.State}}{{end}}</span></div>
+  <span class="status-pill {{.Class}}">{{if .Working}}<span class="spin" aria-hidden="true">⠋</span>{{else}}<span class="sdot"></span>{{end}}{{with .Activity}}<span class="activity">{{.Word}}</span>{{else}}{{.State}}{{end}}</span></div>
+  {{if .Working}}<p class="working-band"><span class="pulse" aria-hidden="true"></span>Working {{.Where}}{{with .Activity}}{{with .Meta}} · {{.}}{{end}}{{end}}</p>{{else if .Where}}<p class="where dim">Idle {{.Where}}</p>{{end}}
   {{with .Order}}<p class="on"><span class="wo">{{.No}}</span> {{.Title}}</p>
   <p class="ometa"><span class="ostatus s-{{.Status}}">{{.Status}}</span> · {{.Elapsed}}{{if .Timebox}} of {{dur .Timebox}}{{end}}{{if .Rounds}} · round {{.Rounds}}{{end}}{{with .Flag}} · <span class="blocked">{{.}}</span>{{end}}</p>
   {{if .Timebox}}<span class="tbar{{if ge .Used 100}} over{{end}}"><span style="width: {{.Used}}%"></span></span>{{end}}
-  {{else}}{{if .Lead}}<p class="on dim">Runs the team's outcomes and reviews hand-backs.</p>{{else}}<p class="on dim">No work order in flight.</p>{{end}}{{end}}
+  {{else}}{{if not .Lead}}<p class="on dim">No work order in flight.</p>{{end}}{{end}}
   {{with .Last}}<p class="said"><time>{{.At.Local.Format "Mon 15:04"}}</time> {{.Text}}</p>{{end}}
 </a>{{end}}</div>
-{{with .Idle}}<p class="idle-line dim">Not on a work order: {{range $i, $m := .}}{{if $i}}, {{end}}<a href="{{$m.Href}}">{{$m.Name}}</a>{{end}}</p>{{end}}
 <h2 class="team-h">Work orders</h2>
 <div class="lanes">{{range .Lanes}}<section class="card lane lane-{{.Class}}{{if not .Orders}} quiet{{end}}"><h3 class="card-head"><span class="cdot"></span>{{.Title}}{{with .Orders}}<span class="pill">{{len .}}</span>{{end}}</h3>
 {{if .Orders}}<ul class="orders">{{range .Orders}}{{template "order" .}}{{end}}</ul>{{else}}<p class="dim none">{{.Empty}}</p>{{end}}{{with .Note}}<p class="dim sub">{{.}}</p>{{end}}</section>{{end}}</div>

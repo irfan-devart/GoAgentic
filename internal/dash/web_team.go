@@ -18,11 +18,10 @@ type webTeam struct {
 	Lead, LeadTitle, LeadHref string
 	Initial                   string
 	Hue                       int
-	// Members counts the lead's members; Live is the lead and every member
-	// with a running pane or an order in flight, Idle the rest.
+	// Members counts the lead's members; Live is the lead, then every
+	// member in the workspace's order, so the cards stay put as they change.
 	Members int
 	Live    []teamMember
-	Idle    []teamMember
 	// NeedsYou is what the principal should see: an order waiting on them,
 	// past its due time, or at the round limit.
 	NeedsYou []*webOrder
@@ -43,9 +42,13 @@ type teamMember struct {
 	Hue               int
 	Lead              bool
 	State, Class      string
-	Activity          *activity
-	Order             *webOrder
-	Last              *LogLine
+	// Working: its pane is busy now. Off: no pane running. Where says
+	// which pane: its task pane, its own session, or a peer pane.
+	Working, Off bool
+	Where        string
+	Activity     *activity
+	Order        *webOrder
+	Last         *LogLine
 }
 
 type webOrder struct {
@@ -205,8 +208,12 @@ func (s *webServer) makeTeam(ws *Workspace, t *Team, all bool) *webTeam {
 	lead := teamMember{Name: t.Lead.Name, Title: t.Lead.Title, Href: wt.LeadHref, Lead: true,
 		Initial: wt.Initial, Hue: wt.Hue}
 	lead.State, lead.Class = paneState(t.Lead.Live)
-	if lead.State == "working" {
+	lead.Working, lead.Off = lead.State == "working", t.Lead.Live == nil || !t.Lead.Live.Running
+	if lead.Working {
 		lead.Activity = s.paneActivity(t.Lead.Live)
+	}
+	if !lead.Off {
+		lead.Where = paneWhere(t.Lead.Live, false)
 	}
 	lead.Last = lastSaid(orders, t.Lead.Name)
 	wt.Live = append(wt.Live, lead)
@@ -219,20 +226,22 @@ func (s *webServer) makeTeam(ws *Workspace, t *Team, all bool) *webTeam {
 				break
 			}
 		}
-		pane := taskPane(ws, m)
-		if pane == nil && m.Live != nil && m.Live.Running {
-			pane = m.Live
+		pane, task := taskPane(ws, m), true
+		if pane == nil || !pane.Running {
+			if m.Live != nil && m.Live.Running {
+				pane, task = m.Live, false
+			}
 		}
 		tm.State, tm.Class = paneState(pane)
-		if tm.State == "working" {
+		tm.Working, tm.Off = tm.State == "working", pane == nil || !pane.Running
+		if tm.Working {
 			tm.Activity = s.paneActivity(pane)
 		}
-		tm.Last = lastSaid(orders, m.Name)
-		if tm.Order != nil || (pane != nil && pane.Running) {
-			wt.Live = append(wt.Live, tm)
-		} else {
-			wt.Idle = append(wt.Idle, tm)
+		if !tm.Off {
+			tm.Where = paneWhere(pane, task)
 		}
+		tm.Last = lastSaid(orders, m.Name)
+		wt.Live = append(wt.Live, tm)
 	}
 
 	// Outcomes: the active ones with their orders, then the closed.
@@ -397,6 +406,17 @@ func taskPane(ws *Workspace, m *Agent) *LivePane {
 		}
 	}
 	return found
+}
+
+// paneWhere says which pane a team member is running in.
+func paneWhere(p *LivePane, task bool) string {
+	switch {
+	case task:
+		return "in its task pane"
+	case !sessionPane(p):
+		return "in a peer pane"
+	}
+	return "in its own session"
 }
 
 // paneState is a team member's one word on its pane.
