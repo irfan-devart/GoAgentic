@@ -556,17 +556,17 @@ func TestTranscriptStarts(t *testing.T) {
 	write(t, filepath.Join(dir, "d.txt"), line("varro", "2026-09-28T05:00:00Z"))
 	write(t, filepath.Join(dir, "e.jsonl"), line("varro task peer/2026-09-28-0600-task-from-sigrid.md", "2026-09-28T06:00:00Z"))
 	// Arguments may hold angle brackets ("record 'Waiting on Norman — <the one thing>'").
-	write(t, filepath.Join(dir, "f.jsonl"), line("yoshi commit it; record <the one thing> then wrap", "2026-09-29T01:00:00Z"))
+	write(t, filepath.Join(dir, "f.jsonl"), line("dario commit it; record <the one thing> then wrap", "2026-09-29T01:00:00Z"))
 
 	c := NewTranscriptCache()
 	starts := c.Starts(dir)
 	if got := starts["sigrid"].Started.Format(time.RFC3339); got != "2026-09-28T01:00:00Z" {
 		t.Errorf("sigrid started = %s", got)
 	}
-	if got := starts["yoshi"].Started.Format(time.RFC3339); got != "2026-09-29T01:00:00Z" {
-		t.Errorf("a start whose arguments hold < must count: yoshi started = %s", got)
+	if got := starts["dario"].Started.Format(time.RFC3339); got != "2026-09-29T01:00:00Z" {
+		t.Errorf("a start whose arguments hold < must count: dario started = %s", got)
 	}
-	if said, agent := userText("<command-name>/agents:start</command-name>\n<command-args>yoshi fix <it>\nthen wrap</command-args>"); agent != "yoshi" || said != "/agents:start yoshi fix <it>\nthen wrap" {
+	if said, agent := userText("<command-name>/agents:start</command-name>\n<command-args>dario fix <it>\nthen wrap</command-args>"); agent != "dario" || said != "/agents:start dario fix <it>\nthen wrap" {
 		t.Errorf("userText = %q, %q", said, agent)
 	}
 	if _, ok := starts["varro"]; ok {

@@ -385,8 +385,8 @@ func teamCards(ws *Workspace, all bool) []teamCard {
 	return out
 }
 
-// taskPane is the member's /agents:delegate pane ("balbus-task",
-// "Balbus - Task") under the workspace, or nil.
+// taskPane is the member's /agents:delegate pane ("astrid-task",
+// "Astrid - Task") under the workspace, or nil.
 func taskPane(ws *Workspace, m *Agent) *LivePane {
 	root := filepath.Clean(ws.Root)
 	name := strings.ToLower(m.Name)

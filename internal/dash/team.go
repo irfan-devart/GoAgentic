@@ -214,7 +214,7 @@ func stripWOPrefix(s string) string {
 	return s
 }
 
-// parseLog reads "- 08:30 Balbus — text" lines. Log times carry no date: a
+// parseLog reads "- 08:30 Astrid — text" lines. Log times carry no date: a
 // line is on the order's start day, or a later one when its time falls well
 // before the line above it (the log ran past midnight).
 func parseLog(body string, start time.Time) []LogLine {
@@ -243,8 +243,8 @@ func parseLog(body string, start time.Time) []LogLine {
 	return out
 }
 
-// splitWho takes the speaker off the front of a log entry: "Balbus — text",
-// "Probus (WO-9) — text", "Frontinus: text".
+// splitWho takes the speaker off the front of a log entry: "Astrid — text",
+// "Astrid (WO-9) — text", "Sigrid: text".
 func splitWho(s string) (string, string) {
 	m := logWhoRe.FindStringSubmatchIndex(s)
 	if m == nil {
