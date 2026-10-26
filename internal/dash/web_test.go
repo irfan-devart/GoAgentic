@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -879,6 +880,12 @@ func TestWebShowsTheHarnessStatusLine(t *testing.T) {
 		if _, body := get(t, h, path); !strings.Contains(body, `<span class="activity">Percolating…</span> <span class="dim">26s · ↓ 482 tokens</span>`) {
 			t.Errorf("%s lacks the status line", path)
 		}
+	}
+	// The header pill says the state, not the harness's word, with its time and tokens.
+	_, body := get(t, h, "/w/alpha/Sigrid")
+	pill := regexp.MustCompile(`<span class="status-pill.*?</span></span>`).FindString(body)
+	if !strings.Contains(pill, `<span class="dim">26s · ↓ 482 tokens</span>`) || strings.Contains(pill, "Percolating") {
+		t.Errorf("header pill = %s", pill)
 	}
 	// A working agent's card on the workspace page is marked like a team card.
 	if _, body := get(t, h, "/w/alpha"); !strings.Contains(body, `<a class="acard busy"`) || !strings.Contains(body, `Working · Percolating… <span class="meta">26s · ↓ 482 tokens</span>`) {
