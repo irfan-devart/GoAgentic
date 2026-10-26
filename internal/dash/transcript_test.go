@@ -80,6 +80,16 @@ func TestChatMarkdownEscapes(t *testing.T) {
 	}
 }
 
+func TestChatMarkdownTables(t *testing.T) {
+	got := string(chatMarkdown("Here:\n\n| Team | Work |\n|---|:---:|\n| **Acme** (PE) | ships <it> |\n| Dario | — |\n\nAfter.\n| not | a table |"))
+	want := `Here:<div class="mdtable"><table><thead><tr><th>Team</th><th>Work</th></tr></thead><tbody>` +
+		`<tr><td><strong>Acme</strong> (PE)</td><td>ships &lt;it&gt;</td></tr><tr><td>Dario</td><td>—</td></tr></tbody></table></div>` +
+		"After.\n| not | a table |"
+	if got != want {
+		t.Errorf("table:\n got %s\nwant %s", got, want)
+	}
+}
+
 func TestWebAgentPageShowsTheSession(t *testing.T) {
 	parent := webFleet(t)
 	root := filepath.Join(parent, "alpha")

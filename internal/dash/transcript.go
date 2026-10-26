@@ -323,12 +323,91 @@ func chatMarkdown(s string) template.HTML {
 			b.WriteString("<pre>" + html.EscapeString(strings.TrimRight(part, "\n")) + "</pre>")
 			continue
 		}
-		t := html.EscapeString(part)
-		t = mdCodeRe.ReplaceAllString(t, "<code>$1</code>")
-		t = mdBoldRe.ReplaceAllString(t, "<strong>$1</strong>")
-		t = mdLinkRe.ReplaceAllString(t, `<a href="$2" rel="noreferrer" target="_blank">$1</a>`)
-		t = mdHeadRe.ReplaceAllString(t, "<strong>$1</strong>")
-		b.WriteString(t)
+		b.WriteString(chatProse(part))
 	}
 	return template.HTML(b.String()) // escaped above
+}
+
+// chatProse renders text outside fences: tables as tables, the rest line by
+// line with the inline marks.
+func chatProse(s string) string {
+	var b strings.Builder
+	lines := strings.Split(s, "\n")
+	text := []string{}
+	flush := func() {
+		if len(text) > 0 {
+			b.WriteString(chatInline(strings.Join(text, "\n")))
+			text = text[:0]
+		}
+	}
+	for i := 0; i < len(lines); {
+		if i+1 < len(lines) && isTableRow(lines[i]) && mdRuleRe.MatchString(strings.TrimSpace(lines[i+1])) {
+			end := i + 2
+			for end < len(lines) && isTableRow(lines[end]) {
+				end++
+			}
+			// A table is a block of its own: it takes the place of the
+			// blank lines around it.
+			if n := len(text); n > 0 && strings.TrimSpace(text[n-1]) == "" {
+				text = text[:n-1]
+			}
+			flush()
+			b.WriteString(chatTable(lines[i], lines[i+2:end]))
+			i = end
+			if i < len(lines) && strings.TrimSpace(lines[i]) == "" {
+				i++
+			}
+			continue
+		}
+		text = append(text, lines[i])
+		i++
+	}
+	flush()
+	return b.String()
+}
+
+var mdRuleRe = regexp.MustCompile(`^\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?$`)
+
+func isTableRow(line string) bool {
+	t := strings.TrimSpace(line)
+	return strings.HasPrefix(t, "|") && strings.Count(t, "|") >= 2
+}
+
+func tableCells(line string) []string {
+	t := strings.TrimSpace(line)
+	t = strings.TrimSuffix(strings.TrimPrefix(t, "|"), "|")
+	cells := strings.Split(t, "|")
+	for i, c := range cells {
+		cells[i] = chatInline(strings.TrimSpace(c))
+	}
+	return cells
+}
+
+// chatTable renders a Markdown table on one line, so the stylesheet's kept
+// line breaks add no gaps inside it.
+func chatTable(head string, rows []string) string {
+	var b strings.Builder
+	b.WriteString(`<div class="mdtable"><table><thead><tr>`)
+	for _, c := range tableCells(head) {
+		b.WriteString("<th>" + c + "</th>")
+	}
+	b.WriteString("</tr></thead><tbody>")
+	for _, r := range rows {
+		b.WriteString("<tr>")
+		for _, c := range tableCells(r) {
+			b.WriteString("<td>" + c + "</td>")
+		}
+		b.WriteString("</tr>")
+	}
+	b.WriteString("</tbody></table></div>")
+	return b.String()
+}
+
+func chatInline(s string) string {
+	t := html.EscapeString(s)
+	t = mdCodeRe.ReplaceAllString(t, "<code>$1</code>")
+	t = mdBoldRe.ReplaceAllString(t, "<strong>$1</strong>")
+	t = mdLinkRe.ReplaceAllString(t, `<a href="$2" rel="noreferrer" target="_blank">$1</a>`)
+	t = mdHeadRe.ReplaceAllString(t, "<strong>$1</strong>")
+	return t
 }
