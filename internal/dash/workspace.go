@@ -28,7 +28,10 @@ type Workspace struct {
 	Agents        []*Agent
 	// Live is false when Herdr could not be queried, so the Live column is
 	// unknown rather than empty.
-	Live    bool
+	Live bool
+	// Panes is every Herdr pane seen, for the task panes of a team
+	// (team.go), which are not the agents' own.
+	Panes   []LivePane
 	Scanned time.Time
 }
 
@@ -124,6 +127,7 @@ func Scan(root string, opts Options) (*Workspace, error) {
 	if opts.Herdr != nil {
 		if panes, err := opts.Herdr(); err == nil {
 			ws.Live = true
+			ws.Panes = panes
 			attachLive(ws, panes)
 		}
 	}

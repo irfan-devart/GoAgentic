@@ -43,6 +43,7 @@ var webTemplate = template.Must(template.New("page.tmpl").Funcs(template.FuncMap
 	"trimHash":     func(id string) string { return strings.TrimPrefix(id, "#") },
 	"trimPlan":     func(next string) string { return strings.TrimPrefix(next, "» ") },
 	"plural":       plural,
+	"dur":          roundDur,
 	"styleVersion": func() string { return styleVersion },
 }).ParseFS(webFiles, "web/page.tmpl"))
 
@@ -157,6 +158,7 @@ func NewWebHandler(src WebSource) http.Handler {
 	mux.HandleFunc("GET /{$}", s.home)
 	mux.HandleFunc("GET /w/{ws}", s.workspace)
 	mux.HandleFunc("GET /w/{ws}/{agent}", s.agent)
+	mux.HandleFunc("GET /t/{ws}/{lead}", s.team)
 	mux.HandleFunc("GET /w/{ws}/{agent}/file", s.file)
 	mux.HandleFunc("POST /w/{ws}/{agent}/answer", s.answer)
 	mux.HandleFunc("POST /w/{ws}/{agent}/send", s.send)
@@ -228,11 +230,14 @@ type page struct {
 
 	Workspace *webWorkspace
 	Agent     *webAgent
+	Team      *webTeam
 	File      *webFile
 }
 
 type webWorkspace struct {
 	Rows []agentRow
+	// Teams are the workspace's leads and their members (web_team.go).
+	Teams []teamCard
 	// Over and Soon count running sessions past or near the context
 	// budget.
 	Over, Soon int
@@ -435,7 +440,7 @@ func (s *webServer) workspace(w http.ResponseWriter, r *http.Request) {
 	c := ws.Counts()
 	p := page{
 		Title: ws.Name, Heading: ws.Name, All: all, Scanned: ws.Scanned, Live: ws.Live,
-		Counts: &c, First: firstName(ws.Principal), Workspace: &webWorkspace{},
+		Counts: &c, First: firstName(ws.Principal), Workspace: &webWorkspace{Teams: teamCards(ws, all)},
 		Nav: s.workspaceNav(ws, "", all),
 	}
 	// Three cards lead: what waits on the principal, on others, and what

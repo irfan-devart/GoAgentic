@@ -21,6 +21,9 @@ type Agent struct {
 	Harness string
 	// Model is the agent's own context.md model: override, if any.
 	Model string
+	// Lead is the agent named in its context.md lead: key, which may hand it
+	// work orders (reference/task.md).
+	Lead string
 
 	Retired bool
 
@@ -97,6 +100,7 @@ func loadAgent(dir, principal string, now time.Time) *Agent {
 		Scope:   ctx["scope"],
 		Harness: ctx["harness"],
 		Model:   ctx["model"],
+		Lead:    ctx["lead"],
 		Retired: strings.EqualFold(ctx["status"], "retired"),
 	}
 	for _, f := range coreFiles {

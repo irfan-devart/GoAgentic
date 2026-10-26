@@ -13,7 +13,9 @@ type nav struct {
 	// of its agents.
 	Current string
 	OnHome  bool
-	Agents  []navLink
+	// Teams are the workspace's leads, each a link to its team page.
+	Teams  []navLink
+	Agents []navLink
 }
 
 type navLink struct {
@@ -42,7 +44,7 @@ const fleetCacheFor = 20 * time.Second
 // workspaceNav is the shell for a workspace's pages; agent is the agent
 // shown, "" on the workspace's home.
 func (s *webServer) workspaceNav(ws *Workspace, agent string, all bool) *nav {
-	n := &nav{Workspaces: s.workspaceLinks(ws, all), Current: ws.Name, OnHome: agent == ""}
+	n := &nav{Workspaces: s.workspaceLinks(ws, all), Current: ws.Name, OnHome: agent == "", Teams: teamLinks(ws, all)}
 	if agent != "" {
 		for i := range n.Workspaces {
 			n.Workspaces[i].Selected, n.Workspaces[i].Current = n.Workspaces[i].Current, false

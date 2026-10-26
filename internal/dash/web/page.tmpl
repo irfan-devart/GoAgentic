@@ -194,7 +194,7 @@ main.addEventListener("keydown", e => {
 </html>{{end}}
 
 {{define "main"}}
-<div class="app{{if .Agent}} agent-view{{end}}" data-style="{{styleVersion}}">
+<div class="app{{if .Agent}} agent-view{{end}}{{if .Team}} agent-view team-view{{end}}" data-style="{{styleVersion}}">
 <header class="topbar">
   <button class="menu" type="button" aria-label="Show the sidebar" onclick="document.body.classList.toggle('nav-open')">☰</button>
   <span class="brand">{{with .Nav}}{{.Current}}{{end}}</span>
@@ -203,6 +203,8 @@ main.addEventListener("keydown", e => {
 <nav class="sidebar" data-scroll="sidebar">{{with .Nav}}
   <h4 title="Drag to reorder">Workspaces</h4>
   <ul data-kind="workspaces">{{range .Workspaces}}{{template "navlink" .}}{{end}}</ul>
+  {{with .Teams}}<h4>Teams</h4>
+  <ul class="teams">{{range .}}{{template "teamlink" .}}{{end}}</ul>{{end}}
   <h4 title="Drag to reorder">Agents</h4>
   <ul data-kind="agents" data-ws="{{.Current}}">{{range .Agents}}{{template "navlink" .}}{{end}}</ul>
 {{end}}</nav>
@@ -211,6 +213,7 @@ main.addEventListener("keydown", e => {
 {{if .Queue}}<div class="cards">{{template "queue" .Queue}}{{template "queue" .Others}}{{template "queue" .Overdue}}</div>{{end}}
 {{if .Workspace}}{{template "workspace" .}}{{end}}
 {{if .Agent}}{{template "agent" .}}{{end}}
+{{with .Team}}{{template "team" .}}{{end}}
 {{with .File}}<h2>{{.Name}}</h2><pre class="file">{{.Text}}</pre>{{end}}
 </section>
 </div>
@@ -237,6 +240,8 @@ main.addEventListener("keydown", e => {
 
 {{define "navlink"}}<li data-name="{{.Name}}"><a class="{{if .Current}}current{{else if .Selected}}selected{{end}}{{if .Bold}} bold{{end}}" href="{{.Href}}"{{if .State}} title="{{.State}}"{{end}}><span class="dot {{if .Dot}}{{.Dot}}{{else}}off{{end}}"></span><span class="nm">{{.Name}}{{with .Sub}}<small>{{.}}</small>{{end}}</span>{{if .Badge}}<span class="badge" title="{{.Badge}} waiting on you">{{.Badge}}</span>{{end}}</a></li>{{end}}
 
+{{define "teamlink"}}<li><a class="{{if .Current}}current{{end}}" href="{{.Href}}"><span class="dot {{if .Dot}}{{.Dot}}{{else}}off{{end}}"></span><span class="nm">{{.Name}} team<small>{{.Sub}}</small></span>{{if .Badge}}<span class="badge" title="{{.Badge}} waiting on you">{{.Badge}}</span>{{end}}</a></li>{{end}}
+
 {{define "queue"}}
 <section class="card card-{{.Class}}{{if not .Total}} quiet{{end}}"><h2 class="card-head"><span class="cdot"></span>{{.Title}}{{if .Total}}<span class="pill">{{.Total}}</span>{{end}}</h2>
 {{if .Top}}<ul class="items queue">{{range .Top}}{{template "qline" .}}{{end}}</ul>
@@ -253,6 +258,12 @@ main.addEventListener("keydown", e => {
 
 {{define "workspace"}}
 {{with .Workspace}}
+{{with .Teams}}<h2>Teams</h2>
+<div class="agent-cards">{{range .}}<a class="acard tcard" href="{{.Href}}">
+  <div class="ahead"><span class="dot {{.Dot}}"></span><span class="nm"><b>{{.Lead}} team</b><small>{{with .Title}}{{.}} · {{end}}{{plural .Members "member"}}</small></span>{{if .Counts.NeedsYou}}<span class="badge" title="{{.Counts.NeedsYou}} waiting on you">{{.Counts.NeedsYou}}</span>{{end}}</div>
+  <div class="facts"><span class="{{if .Counts.Working}}ok{{end}}">{{.Counts.Working}} working</span> · <span class="{{if .Counts.Questions}}waiting{{end}}">{{.Counts.Questions}} questions</span> · {{.Counts.Review}} in review · {{.Counts.DoneToday}} done today</div>
+  {{range .On}}<p class="on">{{.}}</p>{{else}}<p class="on dim">Nothing in flight.</p>{{end}}
+</a>{{end}}</div>{{end}}
 <h2>Agents</h2>
 <div class="agent-cards">
 {{range .Rows}}<a class="acard" href="{{.Href}}">
@@ -373,3 +384,54 @@ main.addEventListener("keydown", e => {
   <div class="row"><button type="submit" class="danger">Close anyway</button> <span class="status{{if .CloseError}} error{{end}}">{{.CloseError}}</span></div>
 </form>{{end}}
 {{end}}
+
+{{define "team"}}
+<header class="agent-head team-head">
+  <span class="avatar" style="--hue: {{.Hue}}" aria-hidden="true">{{.Initial}}</span>
+  <div class="who-block">
+    <div class="name-row"><h1 class="agent-name">{{.Lead}} team</h1>
+    <span class="status-pill {{if .Counts.Working}}ok{{end}}">{{if .Counts.Working}}<span class="spin" aria-hidden="true">⠋</span>{{plural .Counts.Working "order"}} in progress{{else}}<span class="sdot"></span>quiet{{end}}</span></div>
+    <p class="agent-title">Led by <a href="{{.LeadHref}}">{{.Lead}}</a>{{with .LeadTitle}} · {{.}}{{end}} · {{plural .Members "member"}} · watch only</p>
+  </div>
+  <div class="head-side team-counts">
+    <span class="chip{{if .Counts.Working}} on-ok{{end}}"><b>{{.Counts.Working}}</b> working</span>
+    <span class="chip{{if .Counts.Questions}} on-waiting{{end}}"><b>{{.Counts.Questions}}</b> questions</span>
+    <span class="chip{{if .Counts.Review}} on-accent{{end}}"><b>{{.Counts.Review}}</b> in review</span>
+    <span class="chip"><b>{{.Counts.DoneToday}}</b> done today</span>
+  </div>
+</header>
+<div class="agent-split team-split">
+<div class="info" data-scroll="info">
+{{with .NeedsYou}}<section class="card card-foryou"><h3 class="card-head"><span class="cdot"></span>Needs you<span class="pill">{{len .}}</span></h3>
+<ul class="orders">{{range .}}{{template "order" .}}{{end}}</ul>
+<p class="dim sub">Past its due time, at the round limit, or waiting on you. The lead brings these to you; answer it in the lead's chat.</p></section>{{end}}
+<div class="live-strip">{{range .Live}}<a class="mcard{{if .Lead}} lead{{end}}{{if eq .State "working"}} busy{{end}}" href="{{.Href}}">
+  <div class="mhead"><span class="avatar sm" style="--hue: {{.Hue}}" aria-hidden="true">{{.Initial}}</span><span class="nm"><b>{{.Name}}</b><small>{{if .Lead}}Lead{{else}}{{.Title}}{{end}}</small></span>
+  <span class="status-pill {{.Class}}">{{if eq .State "working"}}<span class="spin" aria-hidden="true">⠋</span>{{else}}<span class="sdot"></span>{{end}}{{with .Activity}}<span class="activity">{{.Word}}</span>{{else}}{{.State}}{{end}}</span></div>
+  {{with .Order}}<p class="on"><span class="wo">{{.No}}</span> {{.Title}}</p>
+  <p class="ometa"><span class="ostatus s-{{.Status}}">{{.Status}}</span> · {{.Elapsed}}{{if .Timebox}} of {{dur .Timebox}}{{end}}{{if .Rounds}} · round {{.Rounds}}{{end}}{{with .Flag}} · <span class="blocked">{{.}}</span>{{end}}</p>
+  {{if .Timebox}}<span class="tbar{{if ge .Used 100}} over{{end}}"><span style="width: {{.Used}}%"></span></span>{{end}}
+  {{else}}{{if .Lead}}<p class="on dim">Runs the team's outcomes and reviews hand-backs.</p>{{else}}<p class="on dim">No work order in flight.</p>{{end}}{{end}}
+  {{with .Last}}<p class="said"><time>{{.At.Local.Format "Mon 15:04"}}</time> {{.Text}}</p>{{end}}
+</a>{{end}}</div>
+{{with .Idle}}<p class="idle-line dim">Not on a work order: {{range $i, $m := .}}{{if $i}}, {{end}}<a href="{{$m.Href}}">{{$m.Name}}</a>{{end}}</p>{{end}}
+<h2 class="team-h">Work orders</h2>
+<div class="lanes">{{range .Lanes}}<section class="card lane lane-{{.Class}}{{if not .Orders}} quiet{{end}}"><h3 class="card-head"><span class="cdot"></span>{{.Title}}{{with .Orders}}<span class="pill">{{len .}}</span>{{end}}</h3>
+{{if .Orders}}<ul class="orders">{{range .Orders}}{{template "order" .}}{{end}}</ul>{{else}}<p class="dim none">{{.Empty}}</p>{{end}}{{with .Note}}<p class="dim sub">{{.}}</p>{{end}}</section>{{end}}</div>
+<h2 class="team-h">Outcomes</h2>
+<div class="outcomes">{{range .Outcomes}}<section class="card outcome"><h3 class="card-head"><span class="cdot"></span><a href="{{.Href}}">{{.Title}}</a>{{with .Orders}}<span class="pill">{{len .}} in flight</span>{{end}}</h3>
+{{with .Next}}<p class="onext"><span class="dim">Where it stands</span>{{.}}</p>{{end}}
+{{with .Orders}}<ul class="ochips">{{range .}}<li><a href="{{.Href}}">{{.No}} {{.Member}}</a> <span class="ostatus s-{{.Status}}">{{.Status}}</span></li>{{end}}</ul>{{end}}
+<p class="dim sub">{{with .Approved}}Approved {{.}} · {{end}}{{plural .Done "work order"}} done{{with .Plan}} · {{plural (len .) "plan step"}}{{end}}</p>
+</section>{{else}}<p class="dim">No active outcomes.</p>{{end}}</div>
+{{with .Closed}}<details class="closed" data-key="closed-outcomes"><summary class="dim">{{plural (len .) "closed outcome"}}</summary><ul class="closed-list">{{range .}}<li><a href="{{.Href}}">{{.Title}}</a> <span class="dim">· {{plural .Done "work order"}}</span></li>{{end}}</ul></details>{{end}}
+</div>
+<div class="chat-col"><section class="card feed"><h3 class="card-head"><span class="cdot"></span>Activity<span class="feed-note">newest first · every 5 s</span></h3>
+<div class="feed-scroll" data-scroll="feed">{{range .Feed}}<h4 class="feed-day">{{.Day}}</h4>
+<ol class="feed-list">{{range .Lines}}<li class="{{.Kind}}{{if .Lead}} by-lead{{end}}"><time>{{if .NoClock}}–{{else}}{{.At.Local.Format "15:04"}}{{end}}</time><div class="fbody">{{if .Who}}<span class="fwho" style="--hue: {{.Hue}}">{{.Who}}</span> {{end}}<span class="ftext">{{.Text}}</span>{{if .No}} <a class="fref" href="{{.Href}}">{{.No}}</a>{{end}}</div></li>{{end}}</ol>{{else}}<p class="dim none">No work orders yet.</p>{{end}}</div>
+</section></div>
+</div>
+{{end}}
+
+{{define "order"}}<li><div class="oline"><a href="{{.Href}}"><span class="wo">{{.No}}</span> <b>{{.Member}}</b></a>{{with .Flag}} <span class="tag blocked">{{.}}</span>{{end}}{{if .Stopped}} <span class="tag dim">stopped</span>{{end}}{{with .Elapsed}} <span class="dim tag">{{.}}</span>{{end}}</div>
+<div class="otitle">{{.Title}}</div>{{with .Last}}<div class="olast"><time>{{.At.Local.Format "15:04"}}</time> {{if .Who}}{{.Who}}: {{end}}{{.Text}}</div>{{end}}</li>{{end}}
