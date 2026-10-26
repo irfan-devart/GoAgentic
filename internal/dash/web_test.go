@@ -875,10 +875,14 @@ func TestWebShowsTheHarnessStatusLine(t *testing.T) {
 	parent := webFleet(t)
 	h := NewWebHandler(WebSource{FleetRoot: parent, Options: livePanes(parent, "sigrid", "Sigrid - Lead", "working"),
 		ReadPane: func(string) (string, error) { return "✻ Percolating… (26s · ↓ 482 tokens)\n❯\n", nil }})
-	for _, path := range []string{"/w/alpha", "/w/alpha/Sigrid"} {
+	for _, path := range []string{"/w/alpha/Sigrid"} {
 		if _, body := get(t, h, path); !strings.Contains(body, `<span class="activity">Percolating…</span> <span class="dim">26s · ↓ 482 tokens</span>`) {
 			t.Errorf("%s lacks the status line", path)
 		}
+	}
+	// A working agent's card on the workspace page is marked like a team card.
+	if _, body := get(t, h, "/w/alpha"); !strings.Contains(body, `<a class="acard busy"`) || !strings.Contains(body, `Working · Percolating… <span class="meta">26s · ↓ 482 tokens</span>`) {
+		t.Error("the working agent's card is not marked busy")
 	}
 }
 

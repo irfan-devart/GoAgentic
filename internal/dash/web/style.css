@@ -422,3 +422,7 @@ ol.feed-list li.decision { background: color-mix(in srgb, var(--title) 5%, trans
 .bubble th, .bubble td { border: 1px solid var(--line); padding: 5px 8px; text-align: left; vertical-align: top; min-width: 7em; }
 .bubble th { background: var(--hover); font-weight: 600; white-space: nowrap; }
 .bubble tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--hover) 50%, transparent); }
+.acard { position: relative; }
+.acard.busy { border-color: color-mix(in srgb, var(--ok) 70%, var(--line)); background: color-mix(in srgb, var(--ok) 8%, var(--surface)); box-shadow: inset 5px 0 0 var(--ok), 0 0 0 3px color-mix(in srgb, var(--ok) 14%, transparent); padding-left: 20px; }
+.acard .working-band { margin: 8px 0 0; }
+.acard .working-band .meta { font-weight: 400; color: var(--dim); }
