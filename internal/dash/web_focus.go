@@ -121,20 +121,62 @@ func plainText(s string) string {
 	return strings.TrimSpace(strings.NewReplacer("**", "", "`", "").Replace(s))
 }
 
-// linkFocus points each priority that names a tracker item at it.
-func linkFocus(f *sessionFocus, lists ...[]webItem) {
-	if f == nil {
-		return
-	}
+// itemsByID indexes tracker items by number, without the "#".
+func itemsByID(lists ...[]webItem) map[string]*webItem {
 	byID := map[string]*webItem{}
 	for _, list := range lists {
 		for i := range list {
 			byID[strings.TrimPrefix(list[i].ID, "#")] = &list[i]
 		}
 	}
+	return byID
+}
+
+// stepRow is a copy of the tracker item a plan step or priority names, so
+// it shows as the same row as everywhere else, with the agent's words for it
+// first in its panel. Its key differs from the item's own, so opening one
+// does not open the other. Answering stays on the item's own row.
+func stepRow(it *webItem, kind, label, words string) *webItem {
+	row := *it
+	row.Key = kind + "/" + it.Key
+	row.Reply, row.CanAnswer = false, false
+	row.StepLabel, row.Step = label, words
+	return &row
+}
+
+// linkFocus points each priority that names a tracker item at it.
+func linkFocus(f *sessionFocus, lists ...[]webItem) {
+	if f == nil {
+		return
+	}
+	byID := itemsByID(lists...)
 	for i := range f.Items {
-		if m := itemRefRe.FindStringSubmatch(f.Items[i].Lead); m != nil {
-			f.Items[i].Ref = byID[m[1]]
+		if m := itemRefRe.FindStringSubmatch(f.Items[i].Lead); m != nil && byID[m[1]] != nil {
+			words := strings.TrimSpace(f.Items[i].Lead + " " + f.Items[i].Text)
+			f.Items[i].Ref = stepRow(byID[m[1]], "focus", "This session:", words)
 		}
 	}
+}
+
+// webStep is one step of the plan from the last wrap ("Next session:"):
+// the tracker item it names, if open, else the agent's words alone.
+type webStep struct {
+	Priority, Text string
+	Ref            *webItem
+}
+
+var stepIDRe = regexp.MustCompile(`^#(\w+)\s*`)
+
+// linkPlan points each plan step that starts with an open item's number at
+// that item.
+func linkPlan(steps []PlanStep, lists ...[]webItem) []webStep {
+	byID := itemsByID(lists...)
+	out := make([]webStep, len(steps))
+	for i, st := range steps {
+		out[i] = webStep{Priority: st.Priority, Text: st.Text}
+		if m := stepIDRe.FindStringSubmatch(st.Text); m != nil && byID[m[1]] != nil {
+			out[i].Ref = stepRow(byID[m[1]], "plan", "Plan:", strings.TrimSpace(st.Text[len(m[0]):]))
+		}
+	}
+	return out
 }

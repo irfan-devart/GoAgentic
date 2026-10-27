@@ -40,8 +40,13 @@ var styleVersion = func() string {
 }()
 
 var webTemplate = template.Must(template.New("page.tmpl").Funcs(template.FuncMap{
-	"trimHash":     func(id string) string { return strings.TrimPrefix(id, "#") },
-	"trimPlan":     func(next string) string { return strings.TrimPrefix(next, "» ") },
+	"trimHash": func(id string) string { return strings.TrimPrefix(id, "#") },
+	"trimPlan": func(next string) string { return strings.TrimPrefix(next, "» ") },
+	// stepArgs feeds the "steprow" template: a plan step or priority that
+	// names no open tracker item.
+	"stepArgs": func(pri, text, desc string) map[string]string {
+		return map[string]string{"Priority": pri, "Text": text, "Desc": desc}
+	},
 	"plural":       plural,
 	"dur":          roundDur,
 	"styleVersion": func() string { return styleVersion },
@@ -279,7 +284,7 @@ type webAgent struct {
 	State, StateClass string
 	// Activity is the harness's own status line while it works.
 	Activity *activity
-	Plan     []PlanStep
+	Plan     []webStep
 	Mine     []webItem
 	Answered []webItem
 	Inbox    int
@@ -342,6 +347,12 @@ type webChat struct {
 type webItem struct {
 	Item
 	Headline, Detail, Note, History string
+	// Desc is the first sentence after the title, shown under it on the
+	// closed item; Detail then holds the rest of the cell.
+	Desc string
+	// Step is the agent's own words for the item where a session plan or
+	// priority list names it, shown first in the open panel after StepLabel.
+	StepLabel, Step string
 	// Key names the item uniquely on a page (agent/id), so open panels
 	// survive a refresh.
 	Key string
@@ -509,12 +520,13 @@ func (s *webServer) agent(w http.ResponseWriter, r *http.Request) {
 	wa := &webAgent{
 		Name: a.Name, Title: a.Title,
 		Initial: strings.ToUpper(a.Name[:1]), Hue: avatarHue(a.Name),
-		Plan: sec.Plan, Mine: items(sec.Mine), Answered: items(sec.Answered), Inbox: sec.Inbox, Scheduled: webTasks(ws.Scanned, a.Scheduled),
+		Mine: items(sec.Mine), Answered: items(sec.Answered), Inbox: sec.Inbox, Scheduled: webTasks(ws.Scanned, a.Scheduled),
 		Others: items(sec.Others), Blocked: items(sec.Blocked), Open: items(sec.Open),
 		OpenCounts: sec.OpenCounts, Parked: items(sec.Parked), Health: a.Health,
 		HealthLine: fmt.Sprintf("standing %d/%d · sessions %d/%d · actions %d KB",
 			len(a.Standing), maxStanding, len(a.Sessions), maxSessions, a.ActionsSize/1024),
 	}
+	wa.Plan = linkPlan(sec.Plan, wa.Mine, wa.Answered, wa.Others, wa.Blocked, wa.Open, wa.Parked)
 	for _, t := range wa.Scheduled {
 		wa.SchedMissed = wa.SchedMissed || t.Missed != ""
 	}
@@ -1146,6 +1158,7 @@ func makeWebItem(ws *Workspace, a *Agent, it Item, all bool) webItem {
 	}
 	if detail := strings.TrimSpace(strings.TrimPrefix(cleanMarkdown(it.Action), wi.Headline)); detail != "" && detail != wi.Headline {
 		wi.Detail = strings.TrimSpace(strings.TrimLeft(detail, "—–-.: "))
+		wi.Desc, wi.Detail = splitDesc(wi.Detail)
 	}
 	if it.Parked() {
 		wi.Note = parkedNote(it.Status)
@@ -1154,6 +1167,36 @@ func makeWebItem(ws *Workspace, a *Agent, it Item, all bool) webItem {
 		wi.History = fileLink(ws, a, note, all)
 	}
 	return wi
+}
+
+// descMax is the longest description, in runes, shown under an item's title.
+const descMax = 160
+
+// splitDesc takes the first sentence of an item's detail as its description
+// (conventions § actions.md: title, then one sentence saying what the item is
+// for) and returns the rest. A history pointer is never a description.
+func splitDesc(detail string) (desc, rest string) {
+	if detail == "" || strings.HasPrefix(detail, "History") {
+		return "", detail
+	}
+	cut := len(detail)
+	for from := 0; ; {
+		j := strings.Index(detail[from:], ". ")
+		if j < 0 {
+			break
+		}
+		j += from
+		if strings.Count(detail[:j], "(") <= strings.Count(detail[:j], ")") {
+			cut = j + 1
+			break
+		}
+		from = j + 2
+	}
+	desc, rest = strings.TrimSpace(detail[:cut]), strings.TrimSpace(detail[cut:])
+	if len([]rune(desc)) > descMax {
+		return "", detail
+	}
+	return desc, rest
 }
 
 // itemNote finds items/<id>-<slug>.md (or items/<id>.md) for an item.

@@ -1168,3 +1168,29 @@ func TestFocusReplacesThePlanCard(t *testing.T) {
 		t.Errorf("focus declared: want the priorities card and no plan card:\n%s", body)
 	}
 }
+
+func TestSplitDesc(t *testing.T) {
+	for _, c := range []struct{ in, desc, rest string }{
+		{"", "", ""},
+		{"Lets new staff sign in on day one. Next: test with Dario.", "Lets new staff sign in on day one.", "Next: test with Dario."},
+		{"One sentence only", "One sentence only", ""},
+		{"Seats (approx. 40 left). Next: recount.", "Seats (approx. 40 left).", "Next: recount."},
+		{"History → items/3-x.md", "", "History → items/3-x.md"},
+		{strings.Repeat("long ", 40) + ". Rest.", "", strings.Repeat("long ", 40) + ". Rest."},
+	} {
+		if d, r := splitDesc(c.in); d != c.desc || r != c.rest {
+			t.Errorf("splitDesc(%q) = %q, %q; want %q, %q", c.in, d, r, c.desc, c.rest)
+		}
+	}
+}
+
+func TestLinkPlan(t *testing.T) {
+	open := []webItem{{Item: Item{ID: "79", Priority: "P2"}, Headline: "Pilot signed", Key: "Sigrid/79", Reply: true}}
+	steps := linkPlan([]PlanStep{{Priority: "P2", Text: "#79  send the SOW"}, {Text: "tidy notes"}}, open)
+	if r := steps[0].Ref; r == nil || r.Headline != "Pilot signed" || r.Step != "send the SOW" || r.Key != "plan/Sigrid/79" || r.Reply {
+		t.Errorf("step 0 = %+v", r)
+	}
+	if steps[1].Ref != nil || steps[1].Text != "tidy notes" {
+		t.Errorf("step 1 = %+v", steps[1])
+	}
+}

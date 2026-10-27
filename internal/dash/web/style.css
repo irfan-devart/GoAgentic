@@ -64,6 +64,12 @@ details.item summary::-webkit-details-marker { display: none; }
 details.item[open] summary .headline { font-weight: 600; }
 .more { margin: 4px 0 8px 2px; padding-left: 12px; border-left: 2px solid var(--line); }
 .more p { margin: 2px 0; }
+.item.steprow { display: flex; align-items: baseline; gap: 6px; flex: 1; }
+.item.steprow .pri { flex: none; width: 20px; }
+.item.steprow .id { flex: none; min-width: 30px; }
+.item.steprow .ht { flex: 1; min-width: 0; }
+.item.steprow .desc { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.item .desc { display: block; font-weight: 400; font-size: 13px; color: var(--dim); margin-top: 2px; }
 .pri { font-size: 12px; color: var(--dim); font-variant-numeric: tabular-nums; }
 .id { color: var(--dim); font-variant-numeric: tabular-nums; }
 .none { margin: 0; }
@@ -171,6 +177,7 @@ details.item > summary { display: flex; align-items: baseline; gap: 6px; }
 details.item > summary .pri { flex: none; width: 20px; }
 details.item > summary .id { flex: none; min-width: 30px; }
 details.item > summary .ht { flex: 1; min-width: 0; }
+details.item > summary .tags { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; margin-left: 8px; white-space: nowrap; }
 .headline { color: var(--fg); }
 .agent-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; margin: 8px 0 12px; }
 .acard { display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; color: inherit; text-decoration: none; min-width: 0; }

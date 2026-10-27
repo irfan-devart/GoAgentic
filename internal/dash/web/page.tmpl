@@ -280,8 +280,9 @@ main.addEventListener("keydown", e => {
 {{end}}
 
 {{define "item"}}<details class="item{{if .Answers}} answered{{end}}" data-key="{{.Key}}">
-<summary><span class="pri">{{.Priority}}</span> <span class="id">#{{trimHash .ID}}</span> <span class="ht"><span class="headline">{{.Headline}}</span>{{if .Late}} <span class="blocked tag">⚑ overdue</span>{{else if .Due}} <span class="dim tag">due {{.Due.Format "Mon 02 Jan"}}</span>{{end}}{{if .Note}} <span class="dim">{{.Note}}</span>{{end}}{{if .Answers}} <span class="ok tag">✓ answered, waiting on {{.Agent}}</span>{{else if .Reply}} <span class="answer-hint reply">Reply</span>{{else if .CanAnswer}} <span class="answer-hint">Answer</span>{{end}}</span></summary>
+<summary><span class="pri">{{.Priority}}</span> <span class="id">#{{trimHash .ID}}</span> <span class="ht"><span class="headline">{{.Headline}}</span>{{if .Note}} <span class="dim">{{.Note}}</span>{{end}}{{if .Desc}}<span class="desc">{{.Desc}}</span>{{end}}</span>{{if or .Late .Due .Answers .Reply .CanAnswer}}<span class="tags">{{if .Late}}<span class="blocked tag">⚑ overdue</span>{{else if .Due}}<span class="dim tag">due {{.Due.Format "Mon 02 Jan"}}</span>{{end}}{{if .Answers}}<span class="ok tag">✓ answered, waiting on {{.Agent}}</span>{{else if .Reply}}<span class="answer-hint reply">Reply</span>{{else if .CanAnswer}}<span class="answer-hint">Answer</span>{{end}}</span>{{end}}</summary>
 <div class="more">
+  {{if .Step}}<p><span class="dim">{{.StepLabel}}</span> {{.Step}}</p>{{end}}
   {{if .Detail}}<p>{{.Detail}}</p>{{end}}
   <p class="dim">{{if .Owner}}Owner {{.Owner}}{{end}}{{if .Status}} · {{.Status}}{{end}}{{if .Due}} · due {{.Due.Format "2006-01-02"}}{{end}}</p>
   {{if .History}}<p><a href="{{.History}}">History note →</a></p>{{end}}
@@ -328,16 +329,14 @@ main.addEventListener("keydown", e => {
 {{define "tracker"}}{{$href := .SessionHref}}
 <div class="info-cards">
 {{with .Focus}}<section class="card card-focus"><h3 class="card-head"><span class="cdot"></span>Session priorities<span class="agreed{{if not .Agreed}} pending{{end}}">{{if .Agreed}}agreed {{else}}proposed {{end}}{{.At.Local.Format "15:04"}}</span></h3>
-<ol class="focus-list">{{range .Items}}<li>{{if or .Text .Ref}}<details class="focus-item" data-key="focus/{{.Lead}}"><summary>{{.Lead}}</summary><div class="more">
-  {{if .Text}}<p>{{.Text}}</p>{{end}}
-  {{with .Ref}}<p class="ref"><span class="dim">Tracker #{{trimHash .ID}} · {{.Priority}}{{if .Status}} · {{.Status}}{{end}}</span>{{if .Detail}}<br>{{.Detail}}{{end}}</p>{{if .History}}<p><a href="{{.History}}">History note →</a></p>{{end}}{{end}}
-</div></details>{{else}}{{.Lead}}{{end}}</li>{{end}}</ol>{{if not .Agreed}}<p class="dim sub">Waiting for you to agree in the chat.</p>{{end}}</section>{{end}}
+<ul class="items">{{range .Items}}<li>{{with .Ref}}{{template "item" .}}{{else}}{{template "steprow" (stepArgs "" .Lead .Text)}}{{end}}</li>{{end}}</ul>{{if not .Agreed}}<p class="dim sub">Waiting for you to agree in the chat.</p>{{end}}</section>{{end}}
+{{if not .Focus}}<section class="card card-plan{{if not .Plan}} quiet{{end}}"><h3 class="card-head"><span class="cdot"></span>{{if .ChatLive}}Plan from its last wrap{{else}}Next session{{end}}</h3>
+{{if and .ChatLive .Plan}}<p class="dim sub">Set at its last wrap; the session beside may have moved on.</p>{{end}}{{template "plan" .Plan}}</section>{{end}}
 <section class="card card-foryou{{if not (or .Mine .Answered)}} quiet{{end}}"><h3 class="card-head"><span class="cdot"></span>Waiting on you{{with .Mine}}<span class="pill">{{len .}}</span>{{end}}</h3>
 {{if or .Mine .Answered}}<ul class="items">{{range .Mine}}<li>{{template "item" .}}</li>{{end}}{{range .Answered}}<li>{{template "item" .}}</li>{{end}}</ul>{{else}}<p class="dim none">Nothing waiting on you.</p>{{end}}
 </section>
 
-{{if not .Focus}}<section class="card card-plan{{if not .Plan}} quiet{{end}}"><h3 class="card-head"><span class="cdot"></span>{{if .ChatLive}}Plan from its last wrap{{else}}Next session{{end}}</h3>
-{{if and .ChatLive .Plan}}<p class="dim sub">Set at its last wrap; the session beside may have moved on.</p>{{end}}{{template "plan" .Plan}}</section>{{end}}
+
 
 {{if .Others}}<section class="card card-waiting"><h3 class="card-head"><span class="cdot"></span>Waiting on others<span class="pill">{{len .Others}}</span></h3>{{template "section" .Others}}</section>{{end}}
 {{if .Blocked}}<section class="card card-blocked"><h3 class="card-head"><span class="cdot"></span>Blocked<span class="pill">{{len .Blocked}}</span></h3>{{template "section" .Blocked}}</section>{{end}}
@@ -356,7 +355,9 @@ main.addEventListener("keydown", e => {
 </div>
 {{end}}
 
-{{define "plan"}}{{if .}}<ol class="plan-steps">{{range .}}<li>{{if .Priority}}<span class="pri">{{.Priority}}</span> {{end}}{{.Text}}</li>{{end}}</ol>{{else}}<p class="dim none">None</p>{{end}}{{end}}
+{{define "plan"}}{{if .}}<ul class="items">{{range .}}<li>{{with .Ref}}{{template "item" .}}{{else}}{{template "steprow" (stepArgs .Priority .Text "")}}{{end}}</li>{{end}}</ul>{{else}}<p class="dim none">None</p>{{end}}{{end}}
+
+{{define "steprow"}}<div class="item steprow"><span class="pri">{{.Priority}}</span> <span class="id"></span> <span class="ht"><span class="headline">{{.Text}}</span>{{if .Desc}}<span class="desc">{{.Desc}}</span>{{end}}</span></div>{{end}}
 
 {{define "session"}}
 {{if .Loading}}<div class="loading" role="status"><span class="spin" aria-hidden="true">⠋</span> <strong>{{.LoadingText}}</strong>{{with .Activity}} {{template "activity" .}}{{end}}

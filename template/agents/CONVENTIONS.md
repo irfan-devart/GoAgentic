@@ -155,7 +155,12 @@ Single standing file — the agent's running to-do list. Always current, updated
 - Open table: #, Action, Ticket, Owner, Priority, Due/Target, Status, Since
 - Completed table: #, Action, Ticket, Owner, Completed date
 
-**The Action cell starts with a bold label**: what the item is, in 3–8 words and under 60 characters, then whatever detail it needs: `**Acme contract — MSA + first SOW** — v0.5 review copies with Dario …`. The label names the work, not its state, so it carries no dates or status words (`**Wave 2 partner follow-ups**`, not `**Waiting on replies for wave 2 (09-28)**`). A short item still gets one (`**Review the training proposal** — before it goes to the client`). The label is the item's headline wherever it is shown in short: `goagentic dash`, `/agents:status`, `/agents:next`; without one, tools guess a headline from the cell. Rows without a label still work; add one when you next touch the row (`reference/session-end.md` § Step 2).
+**The Action cell starts with a bold title, then one sentence saying what the item is for.** {{PRINCIPAL}} reads these cold on the dashboard, with none of the agent's context, so write both for someone who has never seen the item.
+
+- **The title** says what the item is or what done looks like, in plain words: outcome-first where it fits (`**Cut the CRM to 100 paid seats**`, not `**CRM access policy**`; `**Keep the build server's disk below 85%**`, not `**build server disk headroom**`). 3–8 words, under 60 characters. It names the work, not its state, so it carries no dates or status words (`**Wave 2 partner follow-ups**`, not `**Waiting on replies for wave 2 (09-28)**`).
+- **The description** follows after ` — `: one sentence, ending in a full stop, on what the item is for or why it exists, not where it stands (`**Sign the Acme contract** — The MSA and first SOW that let Acme's pilot start in November. v0.5 review copies with Dario …`). Under 160 characters. It replaces background the cell already carries; it does not add to it, so the cell stays near 300 characters.
+
+The title is the item's headline wherever it is shown in short (`goagentic dash`, `/agents:status`, `/agents:next`); the web dashboard shows the description under it. Without a title, tools guess a headline from the cell. Rows without them still work; add both when you next touch the row (`reference/session-end.md` § Step 2) or at the sweep.
 
 **The cell says what is true now, not how it got there.** After the label: the current state, the next step, and **one pointer** to where the item's history lives (`History → items/31-deploy-pipeline.md`). Aim for about 300 characters. `actions.md` is read at every startup, so a cell that gains a dated line at every step becomes a diary every session pays for. History goes to the **first of these that exists**:
 
@@ -383,7 +388,7 @@ A wrong `Waiting on` sends {{PRINCIPAL}} chasing items nobody needs them for, an
 ## Compass Check
 
 When conversation moves to a topic not in the session focus, the agent pauses briefly:
-- If the new topic is clearly higher priority, acknowledge the shift: "This supersedes what we were working on. Adjusting session focus."
+- If the new topic is clearly higher priority, acknowledge the shift: "This supersedes what we were working on. Adjusting session focus." Then restate the new focus as a numbered list under a `Session focus` heading, so the dashboard's priorities card follows it.
 - If the new topic is a side thread, note it: "I'll capture this in the action tracker. Back to [current focus]?"
 - If unclear, ask: "Is this more urgent than [current focus], or should we note it and come back?"
 
