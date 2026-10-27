@@ -276,7 +276,9 @@ func spaceOf(roots map[string]string, root string) string {
 
 func launch(ws *Workspace, a *Agent, space string, background bool) (string, error) {
 	if os.Getenv("HERDR_ENV") != "1" && os.Getenv("HERDR_BIN_PATH") == "" {
-		return "", ErrNoHerdr
+		if _, err := lookPath("herdr"); err != nil {
+			return "", ErrNoHerdr
+		}
 	}
 	bin := herdrBin()
 	summary, steps := launchPlan(ws, a, space, background)

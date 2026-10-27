@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"os/exec"
 
 	"github.com/charmbracelet/x/ansi"
 	"os"
@@ -681,8 +682,17 @@ esac
 
 	t.Setenv("HERDR_BIN_PATH", "")
 	t.Setenv("HERDR_ENV", "")
+	saved := lookPath
+	t.Cleanup(func() { lookPath = saved })
+	lookPath = func(string) (string, error) { return "", exec.ErrNotFound }
 	if _, err := Launch(&Workspace{}, &Agent{Name: "x"}); err != ErrNoHerdr {
-		t.Errorf("outside Herdr = %v", err)
+		t.Errorf("outside Herdr, no herdr installed = %v", err)
+	}
+	// A dashboard run as a service has no Herdr variables but herdr is
+	// installed: it gets as far as running it.
+	lookPath = func(string) (string, error) { return "/nonexistent/herdr", nil }
+	if _, err := Launch(&Workspace{}, &Agent{Name: "x"}); err == ErrNoHerdr {
+		t.Error("herdr installed, no Herdr variables: refused")
 	}
 }
 

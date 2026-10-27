@@ -133,8 +133,15 @@ func HerdrWorkspaceRoot(herdrWorkspaceID string) (string, error) {
 	return "", ErrNoWorkspace
 }
 
+// herdrBin is the herdr CLI: Herdr's own HERDR_BIN_PATH inside a Herdr
+// pane, else herdr found on PATH or the login-shell PATH (a dashboard run as
+// a service, such as a systemd unit, has neither Herdr's variables nor the
+// user's PATH).
 func herdrBin() string {
 	if bin := os.Getenv("HERDR_BIN_PATH"); bin != "" {
+		return bin
+	}
+	if bin, err := lookPath("herdr"); err == nil {
 		return bin
 	}
 	return "herdr"
