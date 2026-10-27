@@ -28,6 +28,10 @@ type dashFlags struct {
 	width      int
 	web        bool
 	addr       string
+	allowHosts []string
+	cfTeam     string
+	cfAUD      string
+	emails     []string
 }
 
 func newDashCommand() *cobra.Command {
@@ -63,6 +67,10 @@ agents/CONVENTIONS.md, or the one given with --root.`,
 	cmd.Flags().IntVar(&flags.width, "width", 0, "Output width for --once (default: terminal width, else 120).")
 	cmd.Flags().BoolVar(&flags.web, "web", false, "Serve the dashboard as a web page; items waiting on you can be answered there (into the agent's inbox). With --fleet, every workspace.")
 	cmd.Flags().StringVar(&flags.addr, "addr", "127.0.0.1:7777", "With --web, the address to listen on.")
+	cmd.Flags().StringSliceVar(&flags.allowHosts, "allow-host", nil, "With --web, a public hostname requests may use (a Cloudflare Tunnel's); needs --cf-access-team and --cf-access-aud.")
+	cmd.Flags().StringVar(&flags.cfTeam, "cf-access-team", "", "With --web, require a Cloudflare Access token from this team domain (<team>.cloudflareaccess.com) on every request.")
+	cmd.Flags().StringVar(&flags.cfAUD, "cf-access-aud", "", "With --cf-access-team, the Access application's AUD tag.")
+	cmd.Flags().StringSliceVar(&flags.emails, "allow-email", nil, "With --cf-access-team, the only emails let through (on top of the Access policy).")
 	return cmd
 }
 
@@ -177,7 +185,19 @@ func runFleet(cmd *cobra.Command, flags *dashFlags) error {
 // runWeb serves the dashboard over HTTP: the fleet with --fleet, else the
 // one workspace dashRoot finds.
 func runWeb(cmd *cobra.Command, flags *dashFlags) error {
-	src := dash.WebSource{}
+	src := dash.WebSource{AllowHosts: flags.allowHosts}
+	if (flags.cfTeam == "") != (flags.cfAUD == "") {
+		return fmt.Errorf("--cf-access-team and --cf-access-aud go together")
+	}
+	if len(flags.allowHosts) > 0 && flags.cfTeam == "" {
+		return fmt.Errorf("--allow-host needs Cloudflare Access (--cf-access-team, --cf-access-aud): the page can type into your agents' sessions")
+	}
+	if len(flags.emails) > 0 && flags.cfTeam == "" {
+		return fmt.Errorf("--allow-email needs --cf-access-team")
+	}
+	if flags.cfTeam != "" {
+		src.Access = &dash.Access{Team: flags.cfTeam, AUD: flags.cfAUD, Emails: flags.emails}
+	}
 	if flags.fleet {
 		src.FleetRoot = flags.root
 		if src.FleetRoot == "" {

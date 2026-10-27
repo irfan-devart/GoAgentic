@@ -62,6 +62,12 @@ type WebSource struct {
 	// ListenHost is the address the server listens on when it is not a
 	// loopback one; requests must name it or a loopback host (see guard).
 	ListenHost string
+	// AllowHosts are more names requests may use, such as the public
+	// hostname a Cloudflare Tunnel serves the dashboard on. They need Access.
+	AllowHosts []string
+	// Access, when set, requires a valid Cloudflare Access token on every
+	// request (web_access.go).
+	Access *Access
 	// Now stamps answers; nil means time.Now.
 	Now func() time.Time
 	// Prompt types text into a live pane and submits it; nil means
@@ -98,6 +104,9 @@ func Serve(ctx context.Context, addr string, src WebSource, log io.Writer) error
 	}
 	srv := &http.Server{Handler: NewWebHandler(src), ReadHeaderTimeout: 10 * time.Second}
 	fmt.Fprintf(log, "Dashboard on http://%s/ — Ctrl-C to stop.\n", ln.Addr())
+	if src.Access != nil {
+		fmt.Fprintf(log, "Cloudflare Access required on every request (team %s).\n", src.Access.Team)
+	}
 	if src.ListenHost != "" {
 		fmt.Fprintln(log, "Not a loopback address: anyone who can reach it can read every tracker shown, answer as you, and type into your agents' sessions.")
 	}
@@ -188,6 +197,12 @@ func NewWebHandler(src WebSource) http.Handler {
 // grants, and any Origin must pass the same host check.
 func (s *webServer) guard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.src.Access != nil {
+			if _, err := s.src.Access.Check(r); err != nil {
+				http.Error(w, "Cloudflare Access sign-in required: "+err.Error(), http.StatusForbidden)
+				return
+			}
+		}
 		if !s.allowedHost(r.Host) {
 			http.Error(w, "unexpected Host", http.StatusForbidden)
 			return
@@ -212,6 +227,11 @@ func (s *webServer) allowedHost(hostport string) bool {
 	host = strings.Trim(host, "[]")
 	if host == "localhost" || (s.src.ListenHost != "" && host == s.src.ListenHost) {
 		return true
+	}
+	for _, h := range s.src.AllowHosts {
+		if strings.EqualFold(host, h) {
+			return true
+		}
 	}
 	ip := net.ParseIP(host)
 	return ip != nil && ip.IsLoopback()
