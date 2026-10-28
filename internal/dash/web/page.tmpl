@@ -210,7 +210,6 @@ main.addEventListener("keydown", e => {
 {{end}}</nav>
 <section class="content" data-scroll="content">
 {{if .Counts}}{{template "counts" .}}{{end}}
-{{if .Queue}}<div class="cards">{{template "queue" .Queue}}{{template "queue" .Others}}{{template "queue" .Overdue}}</div>{{end}}
 {{if .Workspace}}{{template "workspace" .}}{{end}}
 {{if .Agent}}{{template "agent" .}}{{end}}
 {{with .Team}}{{template "team" .}}{{end}}
@@ -277,6 +276,7 @@ main.addEventListener("keydown", e => {
 </div>
 {{end}}
 {{template "legend"}}
+{{if .Queue}}<div class="cards">{{template "queue" .Queue}}{{template "queue" .Others}}{{template "queue" .Overdue}}</div>{{end}}
 {{end}}
 
 {{define "item"}}<details class="item{{if .Answers}} answered{{end}}" data-key="{{.Key}}">

@@ -247,7 +247,7 @@ type page struct {
 	Live    bool
 	Counts  *Counts
 	First   string
-	// Queue, Others and Overdue lead the workspace's home as cards: what
+	// Queue, Others and Overdue follow the workspace's agents as cards: what
 	// waits on the principal, on others, and what is overdue (web_views.go).
 	Queue, Others, Overdue *queueView
 	// Nav is the app shell: workspace picker and sidebar (web_nav.go).
