@@ -1169,3 +1169,22 @@ func TestWorkspaceBadgeSkipsRetired(t *testing.T) {
 		t.Errorf("badge with retired shown = %d, want more than %d", got, want)
 	}
 }
+
+// A workspace row's split pill: waiting on you left, P1 items waiting on
+// others right, the same counts as the terminal header.
+func TestWorkspaceLinkSplitsBadge(t *testing.T) {
+	root := fixture(t)
+	write(t, filepath.Join(root, "agents/Varro/actions.md"), "# Actions\n\n## Open\n\n"+
+		"| # | Action | Ticket | Owner | Priority | Due/Target | Status | Since |\n|---|---|---|---|---|---|---|---|\n"+
+		"| 1 | **Get the quote** | | Varro | P1 | | Waiting on Dario | 2026-09-01 |\n"+
+		"| 2 | **File it** | | Varro | P2 | | Waiting on Dario | 2026-09-01 |\n")
+	ws, _ := Scan(root, Options{Now: now})
+	c := ws.Counts()
+	if c.Waiting != 1 {
+		t.Fatalf("P1 waiting on others = %d, want 1", c.Waiting)
+	}
+	l := workspaceLink(ws, false)
+	if l.Badge != c.ForYou || l.Others != c.Waiting {
+		t.Errorf("link = %d|%d, want %d|%d", l.Badge, l.Others, c.ForYou, c.Waiting)
+	}
+}

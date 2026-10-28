@@ -238,7 +238,7 @@ main.addEventListener("keydown", e => {
 
 {{define "activity"}}<span class="activity">{{.Word}}</span>{{with .Meta}} <span class="dim">{{.}}</span>{{end}}{{end}}
 
-{{define "navlink"}}<li data-name="{{.Name}}"><a class="{{if .Current}}current{{else if .Selected}}selected{{end}}{{if .Bold}} bold{{end}}" href="{{.Href}}"{{if .State}} title="{{.State}}"{{end}}><span class="dot {{if .Dot}}{{.Dot}}{{else}}off{{end}}"></span><span class="nm">{{.Name}}{{with .Sub}}<small>{{.}}</small>{{end}}</span>{{if .Badge}}<span class="badge" title="{{.Badge}} waiting on you">{{.Badge}}</span>{{end}}</a></li>{{end}}
+{{define "navlink"}}<li data-name="{{.Name}}"><a class="{{if .Current}}current{{else if .Selected}}selected{{end}}{{if .Bold}} bold{{end}}" href="{{.Href}}"{{if .State}} title="{{.State}}"{{end}}><span class="dot {{if .Dot}}{{.Dot}}{{else}}off{{end}}"></span><span class="nm">{{.Name}}{{with .Sub}}<small>{{.}}</small>{{end}}</span>{{if .Others}}<span class="badge split" title="{{.Badge}} waiting on you · {{.Others}} P1 waiting on others"><span class="you{{if not .Badge}} zero{{end}}">{{.Badge}}</span><span class="others">{{.Others}}</span></span>{{else if .Badge}}<span class="badge" title="{{.Badge}} waiting on you">{{.Badge}}</span>{{end}}</a></li>{{end}}
 
 {{define "teamlink"}}<li><a class="{{if .Current}}current{{end}}" href="{{.Href}}"><span class="dot {{if .Dot}}{{.Dot}}{{else}}off{{end}}"></span><span class="nm">{{.Name}} team<small>{{.Sub}}</small></span>{{if .Badge}}<span class="badge" title="{{.Badge}} waiting on you">{{.Badge}}</span>{{end}}</a></li>{{end}}
 
