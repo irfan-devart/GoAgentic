@@ -1188,3 +1188,18 @@ func TestWorkspaceLinkSplitsBadge(t *testing.T) {
 		t.Errorf("link = %d|%d, want %d|%d", l.Badge, l.Others, c.ForYou, c.Waiting)
 	}
 }
+
+// An agent's sidebar row carries the same split pill as a workspace's.
+func TestAgentNavLinkSplitsBadge(t *testing.T) {
+	root := fixture(t)
+	write(t, filepath.Join(root, "agents/Varro/actions.md"), "# Actions\n\n## Open\n\n"+
+		"| # | Action | Ticket | Owner | Priority | Due/Target | Status | Since |\n|---|---|---|---|---|---|---|---|\n"+
+		"| 1 | **Get the quote** | | Varro | P1 | | Waiting on Dario | 2026-09-01 |\n")
+	ws, _ := Scan(root, Options{Now: now})
+	s := &webServer{src: WebSource{Root: root, Options: webOptions}}
+	for _, l := range s.workspaceNav(ws, "", false).Agents {
+		if l.Name == "Varro" && l.Others != 1 {
+			t.Errorf("Varro others = %d, want 1", l.Others)
+		}
+	}
+}

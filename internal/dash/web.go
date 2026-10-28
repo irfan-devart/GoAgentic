@@ -281,7 +281,9 @@ type agentRow struct {
 	NextP1                bool
 	// OnYou counts what waits on the principal: items and unread runs.
 	OnYou int
-	Title string
+	// OnOthers counts P1 items waiting on someone else.
+	OnOthers int
+	Title    string
 	// Now is the agent's running session, when it has one; Ctx its
 	// session health.
 	Now *nowLine
@@ -492,7 +494,7 @@ func (s *webServer) workspace(w http.ResponseWriter, r *http.Request) {
 		row := MakeRow(ws, a)
 		ar := agentRow{
 			Row: row, Href: link(all, "w", ws.Name, a.Name), Tone: toneClass(agentTone(ws, a)), LiveClass: liveClass(row.Live),
-			NextP1: strings.HasPrefix(row.Next, "P1 "), OnYou: len(a.ForPrincipal(ws.Principal)) + a.InboxUnprocessed, Title: a.Title,
+			NextP1: strings.HasPrefix(row.Next, "P1 "), OnYou: len(a.ForPrincipal(ws.Principal)) + a.InboxUnprocessed, OnOthers: a.WaitingCount(ws.Principal), Title: a.Title,
 		}
 		if l, ok := now[a.Name]; ok {
 			ar.Now = &l

@@ -266,7 +266,7 @@ main.addEventListener("keydown", e => {
 <h2>Agents</h2>
 <div class="agent-cards">
 {{range .Rows}}<a class="acard{{with .Now}}{{if .Working}} busy{{end}}{{end}}" href="{{.Href}}">
-  <div class="ahead"><span class="dot {{.Tone}}"></span><span class="nm"><b>{{.Agent}}</b>{{with .Title}}<small>{{.}}</small>{{end}}</span>{{if .OnYou}}<span class="badge" title="{{.OnYou}} waiting on you">{{.OnYou}}</span>{{end}}</div>
+  <div class="ahead"><span class="dot {{.Tone}}"></span><span class="nm"><b>{{.Agent}}</b>{{with .Title}}<small>{{.}}</small>{{end}}</span>{{if .OnOthers}}<span class="badge split" title="{{.OnYou}} waiting on you · {{.OnOthers}} P1 waiting on others"><span class="you{{if not .OnYou}} zero{{end}}">{{.OnYou}}</span><span class="others">{{.OnOthers}}</span></span>{{else if .OnYou}}<span class="badge" title="{{.OnYou}} waiting on you">{{.OnYou}}</span>{{end}}</div>
   {{with .Now}}{{if .Working}}<p class="working-band"><span class="pulse" aria-hidden="true"></span>Working{{with .Activity}} · {{.Word}}{{with .Meta}} <span class="meta">{{.}}</span>{{end}}{{end}}</p>{{end}}{{end}}
   <div class="facts">{{with .Now}}{{if .Working}}<span class="ok">working</span>{{else}}{{template "state" .}}{{end}}{{else}}<span class="{{.LiveClass}}">{{.Live}}</span>{{end}} · <span class="dim">{{.Harness}}</span>{{if ne .Started "—"}} · <span class="dim">started {{.Started}} ago</span>{{end}} · <span class="health-{{.Level}}" title="Health">{{.Health}}</span></div>
   {{with .Ctx}}<p class="actx {{.Tone}}" title="{{.Hint}}"><span class="bar"><span style="width: {{.Pct}}%"></span><i style="left: {{.Budget}}%"></i></span>{{.Text}}</p>{{end}}

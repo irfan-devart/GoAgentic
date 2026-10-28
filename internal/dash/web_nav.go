@@ -24,8 +24,8 @@ type navLink struct {
 	// principal; Bold marks a session whose turn has ended.
 	Dot, State string
 	Badge      int
-	// Others counts P1 items waiting on someone else; set on workspace rows,
-	// which then show a split pill: Badge left, Others right.
+	// Others counts P1 items waiting on someone else; with Badge it makes the
+	// split pill: Badge left, Others right.
 	Others int
 	Bold   bool
 	// Sub is a line under the name: an agent's title.
@@ -58,7 +58,7 @@ func (s *webServer) workspaceNav(ws *Workspace, agent string, all bool) *nav {
 			continue
 		}
 		l := navLink{Name: a.Name, Href: link(all, "w", ws.Name, a.Name), Sub: a.Title, Current: a.Name == agent,
-			Badge: len(a.ForPrincipal(ws.Principal)) + a.InboxUnprocessed}
+			Badge: len(a.ForPrincipal(ws.Principal)) + a.InboxUnprocessed, Others: a.WaitingCount(ws.Principal)}
 		l.Dot, l.State, l.Bold = sessionDot(a)
 		n.Agents = append(n.Agents, l)
 	}
