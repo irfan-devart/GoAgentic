@@ -298,8 +298,10 @@ ul.items.queue .who { min-width: 90px; }
 .badge.split > span { min-width: 18px; padding: 0 5px; }
 .badge.split .you { background: #e5c07b; }
 .badge.split .zero { background: color-mix(in srgb, #e5c07b 22%, transparent); color: #e5c07b; }
+.badge.split .others.zero { background: color-mix(in srgb, #f0883e 22%, transparent); color: #f0883e; }
 .badge.split .others { background: #f0883e; color: #2a1608; }
 .acard .badge.split .zero { color: var(--foryou); background: color-mix(in srgb, var(--foryou) 16%, transparent); }
+.acard .badge.split .others.zero { color: var(--waiting); background: color-mix(in srgb, var(--waiting) 16%, transparent); }
 .content { overflow-y: auto; min-width: 0; padding: 16px 24px 24px; }
 .content > .counts:first-child h1 { font-size: 18px; letter-spacing: 0; }
 .agent-view .content { overflow: hidden; display: flex; flex-direction: column; padding-bottom: 12px; }
