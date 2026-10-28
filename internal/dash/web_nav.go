@@ -107,6 +107,11 @@ func (s *webServer) agentsInOrder(ws *Workspace) []*Agent {
 }
 
 func workspaceLink(ws *Workspace, all bool) navLink {
+	// Agent and team pages scan with retired agents, so a retired agent's
+	// page opens; the badge still counts only the agents the sidebar lists.
+	if !all {
+		ws = withoutRetired(ws)
+	}
 	l := navLink{Name: ws.Name, Href: link(all, "w", ws.Name), Badge: ws.Counts().ForYou}
 	for _, a := range ws.Agents {
 		dot, _, bold := sessionDot(a)
@@ -116,6 +121,18 @@ func workspaceLink(ws *Workspace, all bool) navLink {
 		}
 	}
 	return l
+}
+
+// withoutRetired is a copy of the workspace without its retired agents.
+func withoutRetired(ws *Workspace) *Workspace {
+	c := *ws
+	c.Agents = nil
+	for _, a := range ws.Agents {
+		if !a.Retired {
+			c.Agents = append(c.Agents, a)
+		}
+	}
+	return &c
 }
 
 // dotRank orders dots by urgency, for a workspace's most urgent agent.

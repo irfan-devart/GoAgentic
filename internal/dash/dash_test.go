@@ -1153,3 +1153,19 @@ func TestAgentNameFromNameFile(t *testing.T) {
 		t.Errorf("a heading naming someone else must not rename: %q", got)
 	}
 }
+
+// A retired agent's items stay out of the workspace badge, also when the
+// page shown (an agent's, a team's) scanned with retired agents.
+func TestWorkspaceBadgeSkipsRetired(t *testing.T) {
+	root := fixture(t)
+	write(t, filepath.Join(root, "agents/Cato/actions.md"), sectionedTracker)
+	shown, _ := Scan(root, Options{Now: now})
+	withRetired, _ := Scan(root, Options{Now: now, IncludeRetired: true})
+	want := workspaceLink(shown, false).Badge
+	if got := workspaceLink(withRetired, false).Badge; got != want {
+		t.Errorf("badge with retired scanned = %d, want %d", got, want)
+	}
+	if got := workspaceLink(withRetired, true).Badge; got <= want {
+		t.Errorf("badge with retired shown = %d, want more than %d", got, want)
+	}
+}
